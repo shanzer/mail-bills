@@ -1,0 +1,32 @@
+{
+  "name": "mail-bills-node",
+  "version": "0.1.0",
+  "description": "TypeScript REST service for the Mail Bills physical-mail processing pipeline",
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "check": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "start": "node dist/src/cli.js api --config ../mail-bills/config.yaml",
+    "mail-bills": "node dist/src/cli.js"
+  },
+  "dependencies": {
+    "@fastify/multipart": "^9.0.3",
+    "@types/qrcode": "^1.5.6",
+    "better-sqlite3": "^12.4.6",
+    "fastify": "^5.6.2",
+    "pdf-parse": "^2.4.5",
+    "qrcode": "^1.5.4",
+    "yaml": "^2.8.1"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/node": "^24.10.1",
+    "tsx": "^4.20.6",
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.14"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

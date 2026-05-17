@@ -1,0 +1,23 @@
+root_dir: /Users/buckaroo/.hermes/projects/mail-bills
+icloud_intake_dir:
+icloud_error_dir:
+notion_database_name: Mail & Bills
+pipeline_schedule:
+  enabled: true
+  interval_minutes: 180
+  run_on_startup: false
+  stable_delay_ms: 1000
+intake_upload:
+  host: 0.0.0.0
+  port: 8765
+  intake_dir: /Users/buckaroo/.hermes/projects/mail-bills/intake/uploaded
+  error_dir: /Users/buckaroo/.hermes/projects/mail-bills/intake/upload-error
+  token:
+ocr:
+  local_first: true
+  vision_fallback_enabled: true
+  vision_helper_path: /Users/buckaroo/.hermes/projects/mail-bills/scripts/mail_bills/vision_ocr.swift
+  model_fallback_enabled: true
+  model_provider: ollama
+  model_name: llama3.2:latest
+  low_text_threshold: 40

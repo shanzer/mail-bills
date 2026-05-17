@@ -1,0 +1,612 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Mail Bills Mockups</title>
+    <script>
+      window.tailwind = {
+        config: {
+          theme: {
+            extend: {
+              colors: {
+                charcoal: "#1B2535",
+                "charcoal-mid": "#243040",
+                slatebrand: "#334E68",
+                amberbrand: "#E09B2D",
+                "amber-dark": "#C07818",
+                forest: "#2A7A5E",
+                linen: "#F5F1EB",
+                "linen-dark": "#EDE8E0",
+                "linen-border": "#DDD9D0",
+                "mid-gray": "#6B7A8D",
+                "light-on-dark": "#A8BDD0",
+                bodytext: "#2C3E50"
+              },
+              fontFamily: {
+                display: ["Georgia", "Times New Roman", "serif"],
+                body: ["-apple-system", "BlinkMacSystemFont", "Segoe UI", "Helvetica", "Arial", "sans-serif"],
+                mono: ["Courier New", "Courier", "monospace"]
+              },
+              borderRadius: {
+                brand: "4px",
+                panel: "6px"
+              }
+            }
+          }
+        }
+      };
+    </script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+    <style>
+      :root {
+        --charcoal: #1b2535;
+        --amber: #e09b2d;
+        --linen: #f5f1eb;
+        --linen-border: #ddd9d0;
+        --body-text: #2c3e50;
+      }
+
+      body {
+        background: var(--linen);
+        color: var(--body-text);
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+        line-height: 1.6;
+      }
+
+      .brand-label {
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: 3px;
+        line-height: 1;
+        text-transform: uppercase;
+      }
+
+      .wordmark {
+        font-family: "Courier New", Courier, monospace;
+        font-weight: 600;
+        letter-spacing: 0;
+      }
+
+      .wordmark .bracket {
+        color: var(--amber);
+      }
+
+      .mockup-frame {
+        display: none;
+      }
+
+      .mockup-frame.is-active {
+        display: block;
+      }
+
+      .seg-button[aria-pressed="true"],
+      .status-filter[aria-pressed="true"] {
+        background: var(--amber);
+        color: var(--charcoal);
+        border-color: var(--amber);
+      }
+
+      .icon-button {
+        align-items: center;
+        aspect-ratio: 1 / 1;
+        display: inline-flex;
+        height: 38px;
+        justify-content: center;
+        width: 38px;
+      }
+
+      .scanline {
+        background-image: repeating-linear-gradient(
+          to bottom,
+          rgba(27, 37, 53, 0.05),
+          rgba(27, 37, 53, 0.05) 1px,
+          transparent 1px,
+          transparent 9px
+        );
+      }
+
+      .item-row.is-hidden {
+        display: none;
+      }
+    </style>
+  </head>
+  <body>
+    <header class="sticky top-0 z-40 border-b border-white/10 bg-charcoal text-linen">
+      <div class="mx-auto flex min-h-16 w-full max-w-[1440px] items-center justify-between gap-4 px-4 sm:px-6 lg:px-10">
+        <a href="#console" class="wordmark shrink-0 text-xl leading-none" aria-label="Mail Bills">
+          <span class="bracket">{&thinsp;</span>mail-bills<span class="bracket">&thinsp;}</span>
+          <span class="ml-2 font-body text-[10px] font-semibold uppercase tracking-[5px] text-light-on-dark">desk</span>
+        </a>
+        <nav class="hidden items-center gap-6 text-[13px] font-semibold text-light-on-dark md:flex">
+          <a class="nav-switch text-amberbrand" data-target="console" href="#console">Console</a>
+          <a class="nav-switch" data-target="review" href="#review">Review</a>
+          <a class="nav-switch" data-target="timeline" href="#timeline">Board</a>
+          <a class="nav-switch" data-target="status" href="#status">Status</a>
+        </nav>
+        <div class="flex items-center gap-2">
+          <button class="hidden min-h-10 items-center gap-2 rounded-brand border border-white/10 px-4 text-[13px] font-semibold text-light-on-dark sm:inline-flex">
+            <i data-lucide="shield-check" class="h-4 w-4"></i>
+            Run Dry Check
+          </button>
+          <button class="inline-flex min-h-10 items-center gap-2 rounded-brand bg-amberbrand px-4 text-[13px] font-semibold text-charcoal">
+            <i data-lucide="play" class="h-4 w-4"></i>
+            Run Pipeline
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <main class="mx-auto w-full max-w-[1440px] px-4 py-6 sm:px-6 lg:px-10">
+      <div class="mb-5 flex flex-col gap-4 border-b border-linen-border pb-5 xl:flex-row xl:items-end xl:justify-between">
+        <div>
+          <p class="brand-label mb-3 text-amber-dark">Local V1 Physical Mail</p>
+          <h1 class="font-display text-4xl font-normal leading-tight text-charcoal sm:text-5xl">Mail Bills</h1>
+        </div>
+        <div class="flex w-full max-w-2xl rounded-panel border border-linen-border bg-linen-dark p-1" role="group" aria-label="Mockup variants">
+          <button class="seg-button min-h-10 flex-1 rounded-brand border border-transparent px-3 text-sm font-semibold" data-target="console" aria-pressed="true">Console</button>
+          <button class="seg-button min-h-10 flex-1 rounded-brand border border-transparent px-3 text-sm font-semibold" data-target="review" aria-pressed="false">Review</button>
+          <button class="seg-button min-h-10 flex-1 rounded-brand border border-transparent px-3 text-sm font-semibold" data-target="timeline" aria-pressed="false">Board</button>
+          <button class="seg-button min-h-10 flex-1 rounded-brand border border-transparent px-3 text-sm font-semibold" data-target="status" aria-pressed="false">Status</button>
+        </div>
+      </div>
+
+      <section id="console" class="mockup-frame is-active" aria-label="Console mockup">
+        <div class="grid gap-4 xl:grid-cols-[248px_minmax(0,1fr)]">
+          <aside class="rounded-panel bg-charcoal p-4 text-linen">
+            <div class="mb-6">
+              <p class="brand-label text-amberbrand">Views</p>
+            </div>
+            <div class="space-y-2">
+              <button class="status-filter flex min-h-11 w-full items-center gap-3 rounded-brand border border-transparent px-3 text-left text-sm font-semibold text-light-on-dark" data-filter="Inbox" aria-pressed="true">
+                <i data-lucide="inbox" class="h-4 w-4"></i>
+                Inbox
+                <span class="ml-auto text-xs text-light-on-dark">3</span>
+              </button>
+              <button class="status-filter flex min-h-11 w-full items-center gap-3 rounded-brand border border-transparent px-3 text-left text-sm font-semibold text-light-on-dark" data-filter="Overdue" aria-pressed="false">
+                <i data-lucide="calendar-alert" class="h-4 w-4"></i>
+                Overdue
+                <span class="ml-auto text-xs">1</span>
+              </button>
+              <button class="status-filter flex min-h-11 w-full items-center gap-3 rounded-brand border border-transparent px-3 text-left text-sm font-semibold text-light-on-dark" data-filter="Needs Review" aria-pressed="false">
+                <i data-lucide="file-search" class="h-4 w-4"></i>
+                Needs Review
+                <span class="ml-auto text-xs">5</span>
+              </button>
+              <button class="status-filter flex min-h-11 w-full items-center gap-3 rounded-brand border border-transparent px-3 text-left text-sm font-semibold text-light-on-dark" data-filter="Actionable" aria-pressed="false">
+                <i data-lucide="bell-ring" class="h-4 w-4"></i>
+                Actionable
+                <span class="ml-auto text-xs">4</span>
+              </button>
+              <button class="status-filter flex min-h-11 w-full items-center gap-3 rounded-brand border border-transparent px-3 text-left text-sm font-semibold text-light-on-dark" data-filter="Waiting" aria-pressed="false">
+                <i data-lucide="clock" class="h-4 w-4"></i>
+                Waiting
+                <span class="ml-auto text-xs">2</span>
+              </button>
+              <button class="status-filter flex min-h-11 w-full items-center gap-3 rounded-brand border border-transparent px-3 text-left text-sm font-semibold text-light-on-dark" data-filter="Completed" aria-pressed="false">
+                <i data-lucide="check-circle-2" class="h-4 w-4"></i>
+                Completed
+                <span class="ml-auto text-xs">6</span>
+              </button>
+              <button class="status-filter flex min-h-11 w-full items-center gap-3 rounded-brand border border-transparent px-3 text-left text-sm font-semibold text-light-on-dark" data-filter="Archived" aria-pressed="false">
+                <i data-lucide="archive" class="h-4 w-4"></i>
+                Archived
+                <span class="ml-auto text-xs">18</span>
+              </button>
+              <button class="status-filter flex min-h-11 w-full items-center gap-3 rounded-brand border border-transparent px-3 text-left text-sm font-semibold text-light-on-dark" data-filter="Error" aria-pressed="false">
+                <i data-lucide="circle-alert" class="h-4 w-4"></i>
+                Errors
+                <span class="ml-auto text-xs">0</span>
+              </button>
+            </div>
+          </aside>
+
+          <section class="rounded-panel border border-linen-border bg-linen-dark">
+            <div class="flex flex-wrap items-center justify-between gap-3 border-b border-linen-border p-4">
+              <div>
+                <p class="brand-label text-amber-dark">Work List</p>
+                <h2 id="list-title" class="mt-2 font-display text-2xl font-normal text-charcoal">Inbox</h2>
+              </div>
+              <div class="flex items-center gap-2">
+                <button class="icon-button rounded-brand border border-linen-border bg-linen" aria-label="Refresh list">
+                  <i data-lucide="refresh-cw" class="h-4 w-4"></i>
+                </button>
+                <button class="inline-flex min-h-10 items-center gap-2 rounded-brand border border-linen-border bg-linen px-4 text-sm font-semibold text-charcoal">
+                  <i data-lucide="filter" class="h-4 w-4"></i>
+                  Filter
+                </button>
+              </div>
+            </div>
+
+            <div class="overflow-x-auto">
+              <table class="w-full min-w-[860px] text-left text-sm">
+                <thead class="border-b border-linen-border text-xs font-semibold uppercase tracking-[2px] text-mid-gray">
+                  <tr>
+                    <th class="px-4 py-3">Vendor</th>
+                    <th class="px-4 py-3">Status</th>
+                    <th class="px-4 py-3">Category</th>
+                    <th class="px-4 py-3">Due</th>
+                    <th class="px-4 py-3">Reason</th>
+                    <th class="px-4 py-3">Batch</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-linen-border">
+                  <tr class="item-row bg-linen" data-status="Inbox" data-overdue="false">
+                    <td class="px-4 py-4 font-semibold text-charcoal">Uploaded scan</td>
+                    <td class="px-4 py-4"><span class="rounded-brand bg-slatebrand/10 px-2 py-1 text-xs font-semibold text-slatebrand">Inbox</span></td>
+                    <td class="px-4 py-4 text-mid-gray">UNKNOWN</td>
+                    <td class="px-4 py-4 text-mid-gray">-</td>
+                    <td class="px-4 py-4 text-mid-gray">Pending import</td>
+                    <td class="px-4 py-4 font-mono text-xs text-mid-gray">0930-01</td>
+                  </tr>
+                  <tr class="item-row bg-linen" data-status="Inbox" data-overdue="false">
+                    <td class="px-4 py-4 font-semibold text-charcoal">New PDF pair</td>
+                    <td class="px-4 py-4"><span class="rounded-brand bg-slatebrand/10 px-2 py-1 text-xs font-semibold text-slatebrand">Inbox</span></td>
+                    <td class="px-4 py-4 text-mid-gray">BILL</td>
+                    <td class="px-4 py-4 text-mid-gray">-</td>
+                    <td class="px-4 py-4 text-mid-gray">Stable file check</td>
+                    <td class="px-4 py-4 font-mono text-xs text-mid-gray">0930-02</td>
+                  </tr>
+                  <tr class="item-row bg-linen" data-status="Needs Review" data-overdue="false">
+                    <td class="px-4 py-4 font-semibold text-charcoal">Aetna</td>
+                    <td class="px-4 py-4"><span class="rounded-brand bg-amberbrand/20 px-2 py-1 text-xs font-semibold text-amber-dark">Review</span></td>
+                    <td class="px-4 py-4 text-mid-gray">HEALTH-INSURANCE</td>
+                    <td class="px-4 py-4 text-charcoal">May 18</td>
+                    <td class="px-4 py-4 text-mid-gray">Label conflict</td>
+                    <td class="px-4 py-4 font-mono text-xs text-mid-gray">0930-03</td>
+                  </tr>
+                  <tr class="item-row bg-linen" data-status="Needs Review" data-overdue="false">
+                    <td class="px-4 py-4 font-semibold text-charcoal">Geico</td>
+                    <td class="px-4 py-4"><span class="rounded-brand bg-amberbrand/20 px-2 py-1 text-xs font-semibold text-amber-dark">Review</span></td>
+                    <td class="px-4 py-4 text-mid-gray">HOME-AUTO</td>
+                    <td class="px-4 py-4 text-mid-gray">-</td>
+                    <td class="px-4 py-4 text-mid-gray">Possible duplicate</td>
+                    <td class="px-4 py-4 font-mono text-xs text-mid-gray">0930-04</td>
+                  </tr>
+                  <tr class="item-row bg-linen" data-status="Actionable" data-overdue="true">
+                    <td class="px-4 py-4 font-semibold text-charcoal">PSE&amp;G</td>
+                    <td class="px-4 py-4"><span class="rounded-brand bg-amberbrand/20 px-2 py-1 text-xs font-semibold text-amber-dark">Overdue</span></td>
+                    <td class="px-4 py-4 text-mid-gray">BILL</td>
+                    <td class="px-4 py-4 font-semibold text-amber-dark">May 10</td>
+                    <td class="px-4 py-4 text-mid-gray">$118.40 reminder</td>
+                    <td class="px-4 py-4 font-mono text-xs text-mid-gray">0930-06</td>
+                  </tr>
+                  <tr class="item-row bg-linen" data-status="Actionable" data-overdue="false">
+                    <td class="px-4 py-4 font-semibold text-charcoal">Verizon</td>
+                    <td class="px-4 py-4"><span class="rounded-brand bg-forest/10 px-2 py-1 text-xs font-semibold text-forest">Actionable</span></td>
+                    <td class="px-4 py-4 text-mid-gray">BILL</td>
+                    <td class="px-4 py-4 text-charcoal">May 25</td>
+                    <td class="px-4 py-4 text-mid-gray">$82.14 reminder</td>
+                    <td class="px-4 py-4 font-mono text-xs text-mid-gray">0930-05</td>
+                  </tr>
+                  <tr class="item-row bg-linen" data-status="Waiting" data-overdue="false">
+                    <td class="px-4 py-4 font-semibold text-charcoal">School office</td>
+                    <td class="px-4 py-4"><span class="rounded-brand bg-slatebrand/10 px-2 py-1 text-xs font-semibold text-slatebrand">Waiting</span></td>
+                    <td class="px-4 py-4 text-mid-gray">SCHOOL-FAMILY</td>
+                    <td class="px-4 py-4 text-mid-gray">-</td>
+                    <td class="px-4 py-4 text-mid-gray">Waiting for form</td>
+                    <td class="px-4 py-4 font-mono text-xs text-mid-gray">0900-02</td>
+                  </tr>
+                  <tr class="item-row bg-linen" data-status="Completed" data-overdue="false">
+                    <td class="px-4 py-4 font-semibold text-charcoal">Water Co</td>
+                    <td class="px-4 py-4"><span class="rounded-brand bg-forest/10 px-2 py-1 text-xs font-semibold text-forest">Completed</span></td>
+                    <td class="px-4 py-4 text-mid-gray">BILL</td>
+                    <td class="px-4 py-4 text-mid-gray">Paid May 12</td>
+                    <td class="px-4 py-4 text-mid-gray">Keep record</td>
+                    <td class="px-4 py-4 font-mono text-xs text-mid-gray">0815-06</td>
+                  </tr>
+                  <tr class="item-row bg-linen" data-status="Archived" data-overdue="false">
+                    <td class="px-4 py-4 font-semibold text-charcoal">Hardware receipt</td>
+                    <td class="px-4 py-4"><span class="rounded-brand bg-linen-dark px-2 py-1 text-xs font-semibold text-mid-gray">Archived</span></td>
+                    <td class="px-4 py-4 text-mid-gray">RECEIPT-RECORD</td>
+                    <td class="px-4 py-4 text-mid-gray">-</td>
+                    <td class="px-4 py-4 text-mid-gray">Record only</td>
+                    <td class="px-4 py-4 font-mono text-xs text-mid-gray">0815-07</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
+        </div>
+      </section>
+
+      <section id="review" class="mockup-frame" aria-label="Review mockup">
+        <div class="grid gap-4 xl:grid-cols-[280px_minmax(0,1fr)]">
+          <aside class="rounded-panel border border-linen-border bg-linen-dark">
+            <div class="border-b border-linen-border p-4">
+              <p class="brand-label text-amber-dark">Needs Review</p>
+              <h2 class="mt-2 font-display text-2xl text-charcoal">5 documents</h2>
+            </div>
+            <div class="divide-y divide-linen-border">
+              <button class="flex w-full gap-3 bg-[#FDF6EA] p-4 text-left">
+                <span class="mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-brand bg-amberbrand text-charcoal">
+                  <i data-lucide="alert-triangle" class="h-4 w-4"></i>
+                </span>
+                <span>
+                  <span class="block font-semibold text-charcoal">Aetna</span>
+                  <span class="block text-sm text-mid-gray">Label conflict</span>
+                  <span class="mt-2 block font-mono text-xs text-mid-gray">0930-03</span>
+                </span>
+              </button>
+              <button class="flex w-full gap-3 p-4 text-left">
+                <span class="mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-brand bg-charcoal text-amberbrand">
+                  <i data-lucide="copy-check" class="h-4 w-4"></i>
+                </span>
+                <span>
+                  <span class="block font-semibold text-charcoal">Geico</span>
+                  <span class="block text-sm text-mid-gray">Possible duplicate</span>
+                  <span class="mt-2 block font-mono text-xs text-mid-gray">0930-04</span>
+                </span>
+              </button>
+              <button class="flex w-full gap-3 p-4 text-left">
+                <span class="mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-brand bg-charcoal text-amberbrand">
+                  <i data-lucide="calendar-clock" class="h-4 w-4"></i>
+                </span>
+                <span>
+                  <span class="block font-semibold text-charcoal">Township</span>
+                  <span class="block text-sm text-mid-gray">Missing due date</span>
+                  <span class="mt-2 block font-mono text-xs text-mid-gray">0930-05</span>
+                </span>
+              </button>
+            </div>
+          </aside>
+
+          <section class="rounded-panel border border-linen-border bg-linen-dark">
+            <div class="flex flex-wrap items-center justify-between gap-3 border-b border-linen-border p-4">
+              <div>
+                <p class="brand-label text-amber-dark">Document</p>
+                <h2 class="mt-2 font-display text-2xl text-charcoal">Aetna benefits notice</h2>
+              </div>
+              <div class="flex items-center gap-2">
+                <button class="icon-button rounded-brand border border-linen-border bg-linen" aria-label="Rotate document">
+                  <i data-lucide="rotate-cw" class="h-4 w-4"></i>
+                </button>
+                <button class="inline-flex min-h-10 items-center gap-2 rounded-brand border border-linen-border bg-linen px-4 text-sm font-semibold text-charcoal">
+                  <i data-lucide="external-link" class="h-4 w-4"></i>
+                  Open PDF
+                </button>
+              </div>
+            </div>
+
+            <div class="grid gap-4 p-4 2xl:grid-cols-[minmax(0,1fr)_360px]">
+              <div class="scanline flex min-h-[660px] items-center justify-center rounded-panel border border-linen-border bg-linen p-6">
+                <div class="w-full max-w-[560px] rounded-sm border border-linen-border bg-[#fbfaf6] p-10">
+                  <div class="mb-10 h-5 w-44 bg-charcoal"></div>
+                  <div class="space-y-3">
+                    <div class="h-3 w-full bg-linen-border"></div>
+                    <div class="h-3 w-11/12 bg-linen-border"></div>
+                    <div class="h-3 w-9/12 bg-linen-border"></div>
+                  </div>
+                  <div class="my-10 grid grid-cols-2 gap-5">
+                    <div class="h-20 border border-linen-border"></div>
+                    <div class="h-20 border border-linen-border"></div>
+                  </div>
+                  <div class="space-y-3">
+                    <div class="h-3 w-full bg-linen-border"></div>
+                    <div class="h-3 w-full bg-linen-border"></div>
+                    <div class="h-3 w-8/12 bg-linen-border"></div>
+                  </div>
+                  <div class="mt-12 h-16 border border-linen-border"></div>
+                </div>
+              </div>
+
+              <div class="grid content-start gap-4">
+                <article class="rounded-panel border border-linen-border bg-linen p-4">
+                  <p class="brand-label text-amber-dark">Detected Fields</p>
+                  <dl class="mt-4 grid gap-3 text-sm">
+                    <div class="flex justify-between gap-4">
+                      <dt class="text-mid-gray">Category</dt>
+                      <dd class="font-semibold text-charcoal">HEALTH-INSURANCE</dd>
+                    </div>
+                    <div class="flex justify-between gap-4">
+                      <dt class="text-mid-gray">Shortcut Label</dt>
+                      <dd class="font-semibold text-charcoal">BILL</dd>
+                    </div>
+                    <div class="flex justify-between gap-4">
+                      <dt class="text-mid-gray">Due Date</dt>
+                      <dd class="font-semibold text-charcoal">May 18, 2026</dd>
+                    </div>
+                    <div class="flex justify-between gap-4">
+                      <dt class="text-mid-gray">Confidence</dt>
+                      <dd class="font-semibold text-amber-dark">Medium</dd>
+                    </div>
+                  </dl>
+                </article>
+                <article class="rounded-panel border border-linen-border bg-linen p-4">
+                  <p class="brand-label text-amber-dark">OCR Summary</p>
+                  <p class="mt-4 text-sm text-bodytext">Insurance notice references a response deadline and an account-specific action. Category disagrees with the capture label, so automatic reminder creation is paused.</p>
+                </article>
+              </div>
+            </div>
+
+            <div class="border-t border-linen-border p-4">
+              <p class="brand-label mb-3 text-amber-dark">Actions</p>
+              <div class="grid gap-3 md:grid-cols-3 xl:grid-cols-6">
+                <button class="flex min-h-12 items-center justify-center gap-2 rounded-brand bg-amberbrand px-3 text-sm font-semibold text-charcoal">
+                  <i data-lucide="check-circle-2" class="h-4 w-4"></i>
+                  Use Category
+                </button>
+                <button class="flex min-h-12 items-center justify-center gap-2 rounded-brand border border-linen-border bg-linen px-3 text-sm font-semibold text-charcoal">
+                  <i data-lucide="tag" class="h-4 w-4"></i>
+                  Keep Label
+                </button>
+                <button class="flex min-h-12 items-center justify-center gap-2 rounded-brand border border-linen-border bg-linen px-3 text-sm font-semibold text-charcoal">
+                  <i data-lucide="bell-plus" class="h-4 w-4"></i>
+                  Reminder
+                </button>
+                <button class="flex min-h-12 items-center justify-center gap-2 rounded-brand border border-linen-border bg-linen px-3 text-sm font-semibold text-charcoal">
+                  <i data-lucide="archive" class="h-4 w-4"></i>
+                  Archive
+                </button>
+                <button class="flex min-h-12 items-center justify-center gap-2 rounded-brand border border-linen-border bg-linen px-3 text-sm font-semibold text-charcoal">
+                  <i data-lucide="circle-check" class="h-4 w-4"></i>
+                  Complete
+                </button>
+                <button class="flex min-h-12 items-center justify-center gap-2 rounded-brand border border-red-900/20 bg-red-50 px-3 text-sm font-semibold text-red-900">
+                  <i data-lucide="trash-2" class="h-4 w-4"></i>
+                  Delete
+                </button>
+              </div>
+            </div>
+          </section>
+        </div>
+      </section>
+
+      <section id="timeline" class="mockup-frame" aria-label="Board mockup">
+        <section class="rounded-panel border border-linen-border bg-linen-dark">
+          <div class="flex flex-wrap items-center justify-between gap-3 border-b border-linen-border p-4">
+            <div>
+              <p class="brand-label text-amber-dark">Kanban</p>
+              <h2 class="mt-2 font-display text-2xl text-charcoal">Batch board</h2>
+            </div>
+            <button class="inline-flex min-h-10 items-center gap-2 rounded-brand bg-amberbrand px-4 text-sm font-semibold text-charcoal">
+              <i data-lucide="message-square-text" class="h-4 w-4"></i>
+              Send Summary
+            </button>
+          </div>
+          <div class="grid gap-4 p-4 xl:grid-cols-5">
+            <div class="rounded-panel border border-linen-border bg-linen p-3">
+              <p class="brand-label mb-3 text-amber-dark">Inbox</p>
+              <article class="mb-3 rounded-panel border border-linen-border bg-linen-dark p-3">
+                <p class="font-semibold text-charcoal">Uploaded scan</p>
+                <p class="mt-1 text-sm text-mid-gray">Sidecar ready</p>
+              </article>
+              <article class="rounded-panel border border-linen-border bg-linen-dark p-3">
+                <p class="font-semibold text-charcoal">New PDF pair</p>
+                <p class="mt-1 text-sm text-mid-gray">Stable file check</p>
+              </article>
+            </div>
+            <div class="rounded-panel border border-linen-border bg-linen p-3">
+              <p class="brand-label mb-3 text-amber-dark">Review</p>
+              <article class="mb-3 rounded-panel border-l-[3px] border-amberbrand bg-[#FDF6EA] p-3">
+                <p class="font-semibold text-charcoal">Aetna</p>
+                <p class="mt-1 text-sm text-mid-gray">Label conflict</p>
+              </article>
+              <article class="rounded-panel border-l-[3px] border-amberbrand bg-[#FDF6EA] p-3">
+                <p class="font-semibold text-charcoal">Geico</p>
+                <p class="mt-1 text-sm text-mid-gray">Duplicate candidate</p>
+              </article>
+            </div>
+            <div class="rounded-panel border border-linen-border bg-linen p-3">
+              <p class="brand-label mb-3 text-amber-dark">Actionable</p>
+              <article class="mb-3 rounded-panel border-l-[3px] border-amberbrand bg-[#FDF6EA] p-3">
+                <div class="flex items-start justify-between gap-3">
+                  <p class="font-semibold text-charcoal">PSE&amp;G</p>
+                  <span class="rounded-brand bg-amberbrand/20 px-2 py-1 text-xs font-semibold text-amber-dark">Overdue</span>
+                </div>
+                <p class="mt-1 text-sm text-mid-gray">$118.40 due May 10</p>
+              </article>
+              <article class="mb-3 rounded-panel border-l-[3px] border-forest bg-linen-dark p-3">
+                <p class="font-semibold text-charcoal">Verizon</p>
+                <p class="mt-1 text-sm text-mid-gray">$82.14 due May 25</p>
+              </article>
+              <article class="rounded-panel border-l-[3px] border-forest bg-linen-dark p-3">
+                <p class="font-semibold text-charcoal">Township</p>
+                <p class="mt-1 text-sm text-mid-gray">Response required</p>
+              </article>
+            </div>
+            <div class="rounded-panel border border-linen-border bg-linen p-3">
+              <p class="brand-label mb-3 text-amber-dark">Waiting</p>
+              <article class="rounded-panel border border-linen-border bg-linen-dark p-3">
+                <p class="font-semibold text-charcoal">School office</p>
+                <p class="mt-1 text-sm text-mid-gray">Form pending</p>
+              </article>
+            </div>
+            <div class="rounded-panel border border-linen-border bg-linen p-3">
+              <p class="brand-label mb-3 text-amber-dark">Completed</p>
+              <article class="mb-3 rounded-panel border border-linen-border bg-linen-dark p-3">
+                <p class="font-semibold text-charcoal">Water Co</p>
+                <p class="mt-1 text-sm text-mid-gray">Paid, keep record</p>
+              </article>
+            </div>
+          </div>
+        </section>
+      </section>
+
+      <section id="status" class="mockup-frame" aria-label="System status mockup">
+        <div class="grid gap-4 xl:grid-cols-[minmax(0,1fr)_420px]">
+          <section class="rounded-panel border border-linen-border bg-linen-dark">
+            <div class="border-b border-linen-border p-4">
+              <p class="brand-label text-amber-dark">System Status</p>
+              <h2 class="mt-2 font-display text-2xl text-charcoal">Receiver online</h2>
+            </div>
+            <div class="grid gap-4 p-4 md:grid-cols-2 xl:grid-cols-4">
+              <article class="rounded-panel border border-linen-border bg-linen p-4">
+                <p class="brand-label text-amber-dark">Endpoint</p>
+                <p class="mt-4 font-mono text-xl text-charcoal">200</p>
+                <p class="mt-1 text-sm text-mid-gray">yoyodyne:8765</p>
+              </article>
+              <article class="rounded-panel border border-linen-border bg-linen p-4">
+                <p class="brand-label text-amber-dark">Lock</p>
+                <p class="mt-4 font-mono text-xl text-charcoal">free</p>
+                <p class="mt-1 text-sm text-mid-gray">No active run</p>
+              </article>
+              <article class="rounded-panel border border-linen-border bg-linen p-4">
+                <p class="brand-label text-amber-dark">Last Dry Run</p>
+                <p class="mt-4 font-mono text-xl text-charcoal">clean</p>
+                <p class="mt-1 text-sm text-mid-gray">9:42 AM</p>
+              </article>
+              <article class="rounded-panel border border-linen-border bg-linen p-4">
+                <p class="brand-label text-amber-dark">Errors</p>
+                <p class="mt-4 font-mono text-xl text-charcoal">0</p>
+                <p class="mt-1 text-sm text-mid-gray">No unresolved failures</p>
+              </article>
+            </div>
+          </section>
+
+          <section class="rounded-panel bg-charcoal p-5 text-linen">
+            <p class="brand-label text-amberbrand">Run Commands</p>
+            <div class="mt-5 space-y-4 font-mono text-sm leading-7 text-light-on-dark">
+              <p>uv run python -m mail_bills.processor process-pending --dry-run</p>
+              <p>uv run python -m mail_bills.processor process-pending --sender hermes</p>
+              <p>bin/run-pipeline.bash</p>
+            </div>
+          </section>
+        </div>
+      </section>
+    </main>
+
+    <script>
+      const buttons = document.querySelectorAll(".seg-button");
+      const frames = document.querySelectorAll(".mockup-frame");
+      const navLinks = document.querySelectorAll(".nav-switch");
+      const statusFilters = document.querySelectorAll(".status-filter");
+      const rows = document.querySelectorAll(".item-row");
+      const listTitle = document.querySelector("#list-title");
+
+      function activateMockup(target, updateHash = true) {
+        buttons.forEach((item) => item.setAttribute("aria-pressed", item.dataset.target === target ? "true" : "false"));
+        navLinks.forEach((item) => item.classList.toggle("text-amberbrand", item.dataset.target === target));
+        frames.forEach((frame) => frame.classList.toggle("is-active", frame.id === target));
+        if (updateHash) window.location.hash = target;
+      }
+
+      function activateStatus(status) {
+        statusFilters.forEach((item) => item.setAttribute("aria-pressed", item.dataset.filter === status ? "true" : "false"));
+        rows.forEach((row) => {
+          const shouldShow = status === "Overdue" ? row.dataset.overdue === "true" : row.dataset.status === status;
+          row.classList.toggle("is-hidden", !shouldShow);
+        });
+        if (listTitle) listTitle.textContent = status;
+      }
+
+      buttons.forEach((button) => button.addEventListener("click", () => activateMockup(button.dataset.target)));
+      navLinks.forEach((link) => link.addEventListener("click", (event) => {
+        event.preventDefault();
+        activateMockup(link.dataset.target);
+      }));
+      statusFilters.forEach((filter) => filter.addEventListener("click", () => activateStatus(filter.dataset.filter)));
+
+      const initialTarget = window.location.hash.replace("#", "");
+      if (initialTarget && document.querySelector(`.seg-button[data-target="${initialTarget}"]`)) {
+        activateMockup(initialTarget, false);
+      }
+      activateStatus("Inbox");
+
+      if (window.lucide) {
+        window.lucide.createIcons({ attrs: { "stroke-width": 1.8 } });
+      }
+    </script>
+  </body>
+</html>

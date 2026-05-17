@@ -13,7 +13,7 @@ export const uiHtml = `<!doctype html>
         <small>desk</small>
       </a>
       <nav class="top-nav" aria-label="Primary">
-        <a href="#console" data-view-link="console">Console</a>
+        <a href="#console" data-view-link="console">Documents</a>
         <a href="#review" data-view-link="review">Review</a>
         <a href="#board" data-view-link="board">Board</a>
         <a href="#status" data-view-link="status">Status</a>
@@ -31,7 +31,7 @@ export const uiHtml = `<!doctype html>
           <h1>Mail Bills</h1>
         </div>
         <div class="segmented" role="tablist" aria-label="Views">
-          <button type="button" data-view-tab="console">Console</button>
+          <button type="button" data-view-tab="console">Documents</button>
           <button type="button" data-view-tab="review">Review</button>
           <button type="button" data-view-tab="board">Board</button>
           <button type="button" data-view-tab="status">Status</button>
@@ -54,6 +54,7 @@ export const uiHtml = `<!doctype html>
                 <span data-icon="search"></span>
                 <input id="documentSearch" type="search" placeholder="Search vendor, batch, id" />
               </label>
+              <select class="category-filter" id="documentCategoryFilter" aria-label="Filter all documents by category"></select>
               <button class="button button-primary" type="button" data-run-pipeline="live"><span data-icon="play"></span>Run Pipeline</button>
               <button class="icon-button" type="button" id="refreshDocuments" aria-label="Refresh list"><span data-icon="refresh-cw"></span></button>
             </div>
@@ -130,7 +131,7 @@ export const uiHtml = `<!doctype html>
             <p class="section-label">Actions</p>
             <div class="action-grid">
               <button class="button button-primary" type="button" data-doc-action="update-fields"><span data-icon="check-circle-2"></span>Save Fields</button>
-              <button class="button button-primary" type="button" data-doc-action="actionable"><span data-icon="play"></span>Send to Actionable</button>
+              <button class="button button-primary" type="button" data-doc-action="actionable"><span data-icon="play"></span>Actionable</button>
               <button class="button button-secondary" type="button" data-doc-action="archive"><span data-icon="archive"></span>Archive</button>
               <button class="button button-secondary" type="button" data-doc-action="complete"><span data-icon="circle-check"></span>Complete</button>
               <button class="button button-danger" type="button" data-doc-action="delete"><span data-icon="trash-2"></span>Delete</button>
@@ -462,6 +463,17 @@ h2 { font-size: 26px; }
   background: transparent;
   color: var(--charcoal);
 }
+.category-filter {
+  min-height: 40px;
+  max-width: 240px;
+  border: 1px solid var(--linen-border);
+  border-radius: 4px;
+  background: var(--linen);
+  color: var(--charcoal);
+  padding: 0 10px;
+  font-size: 14px;
+  font-weight: 650;
+}
 .table-wrap { overflow-x: auto; }
 table { width: 100%; min-width: 900px; border-collapse: collapse; text-align: left; font-size: 14px; }
 th {
@@ -658,7 +670,7 @@ dd { margin: 0; color: var(--charcoal); font-weight: 750; overflow-wrap: anywher
 }
 .board {
   display: grid;
-  grid-template-columns: repeat(5, minmax(210px, 1fr));
+  grid-template-columns: repeat(6, minmax(210px, 1fr));
   gap: 16px;
   padding: 16px;
   overflow-x: auto;
@@ -840,6 +852,7 @@ pre {
   .segmented { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .toolbar { width: 100%; flex-wrap: wrap; justify-content: flex-end; }
   .search { width: 100%; }
+  .category-filter { max-width: none; width: 100%; }
   .panel-header { align-items: flex-start; flex-direction: column; }
   .pairing-strip { align-items: stretch; flex-direction: column; }
   .filter-list, .metrics, .action-grid { grid-template-columns: 1fr; }
@@ -848,10 +861,11 @@ pre {
 
 export const uiJs = `const categories = ["BILL", "HEALTH-INSURANCE", "OTHER-INSURANCE", "SCHOOL-FAMILY", "TAX-LEGAL-GOVERNMENT", "HOME-AUTO", "RECEIPT-RECORD", "SUBSCRIPTION", "UNKNOWN"];
 const statuses = ["imported", "Inbox", "Needs Review", "Actionable", "Waiting", "Completed", "Archived", "Error", "Duplicate", "Deleted"];
-const boardStatuses = ["imported", "Inbox", "Needs Review", "Actionable", "Waiting", "Completed"];
+const boardStatuses = ["Waiting", "imported", "Inbox", "Needs Review", "Actionable", "Completed"];
 const state = {
   documents: [],
   status: "All",
+  category: "All",
   query: "",
   selectedId: null,
   currentView: "console",
@@ -864,6 +878,7 @@ const els = {
   empty: document.getElementById("documentsEmpty"),
   workListTitle: document.getElementById("workListTitle"),
   search: document.getElementById("documentSearch"),
+  categoryFilter: document.getElementById("documentCategoryFilter"),
   refreshDocuments: document.getElementById("refreshDocuments"),
   reviewItems: document.getElementById("reviewItems"),
   reviewCount: document.getElementById("reviewCount"),
@@ -911,6 +926,7 @@ document.querySelectorAll("[data-icon]").forEach((node) => {
   node.innerHTML = icon(node.getAttribute("data-icon"));
 });
 els.categorySelect.innerHTML = categories.map((category) => "<option value='" + category + "'>" + category + "</option>").join("");
+els.categoryFilter.innerHTML = "<option value='All'>All Categories</option>" + categories.map((category) => "<option value='" + category + "'>" + category + "</option>").join("");
 
 function text(value, fallback = "-") {
   if (value === undefined || value === null || value === "") return fallback;
@@ -944,6 +960,7 @@ function visibleDocuments() {
     const status = text(doc.status, "Inbox");
     const statusMatch = state.status === "All" ? status !== "Deleted" : state.status === "Overdue" ? isOverdue(doc) : status === state.status;
     if (!statusMatch) return false;
+    if (state.status === "All" && state.category !== "All" && text(doc.category) !== state.category) return false;
     if (!query) return true;
     return [doc.document_id, doc.batch_id, doc.vendor, doc.category, doc.review_reason].some((value) => text(value, "").toLowerCase().includes(query));
   });
@@ -1026,7 +1043,14 @@ function renderReview() {
   }).join("") || "<div class='empty-state is-visible'>No documents need review.</div>";
 
   const doc = selectedDocument();
-  document.querySelectorAll("[data-doc-action]").forEach((button) => button.disabled = !doc);
+  document.querySelectorAll("[data-doc-action]").forEach((button) => {
+    const action = button.getAttribute("data-doc-action");
+    const status = text(doc?.status, "");
+    const disabled = !doc
+      || (action === "actionable" && status === "Actionable")
+      || ((action === "archive" || action === "complete") && status !== "Actionable");
+    button.disabled = disabled;
+  });
   els.openPdf.disabled = !doc;
   if (!doc) {
     els.reviewTitle.textContent = "Select a document";
@@ -1200,6 +1224,11 @@ document.addEventListener("click", async (event) => {
 els.search.addEventListener("input", () => {
   state.query = els.search.value;
   renderTable();
+});
+els.categoryFilter.addEventListener("change", () => {
+  state.category = els.categoryFilter.value;
+  if (state.status !== "All") state.status = "All";
+  renderAll();
 });
 els.refreshDocuments.addEventListener("click", () => loadDocuments().then(() => toast("Document list refreshed.")).catch((error) => toast(error.message)));
 els.refreshStatus.addEventListener("click", () => loadStatus().then(() => toast("Status refreshed.")).catch((error) => toast(error.message)));

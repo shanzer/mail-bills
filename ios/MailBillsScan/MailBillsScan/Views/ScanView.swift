@@ -22,57 +22,48 @@ struct ScanView: View {
 
     var body: some View {
         NavigationStack {
-            Form {
-                Section {
-                    LabeledContent("Batch", value: batchId)
-                    LabeledContent("Scanned", value: "\(itemCount)")
-                    LabeledContent("Pending Uploads", value: "\(outboxCount)")
-                    LabeledContent("Mac", value: pairing.endpoint.host ?? pairing.endpoint.absoluteString)
-                    Text(statusText)
-                        .foregroundStyle(.secondary)
-                }
-
-                Section {
-                    Picker("Label", selection: $selectedCategory) {
-                        ForEach(MailCategory.allCases) { category in
-                            Text(category.label).tag(category)
+            ScrollView {
+                VStack(alignment: .leading, spacing: AppTheme.Spacing.md) {
+                    WorkSurface {
+                        HStack(alignment: .top, spacing: AppTheme.Spacing.sm) {
+                            VStack(alignment: .leading, spacing: 6) {
+                                Text("Paired Mac")
+                                    .font(.appSectionLabel)
+                                    .tracking(3)
+                                    .foregroundStyle(AppTheme.ColorPalette.lightOnDark)
+                                Text(pairing.endpoint.host ?? pairing.endpoint.absoluteString)
+                                    .font(.headline)
+                            }
+                            Spacer()
+                            Text(outboxCount == 0 ? "No pending uploads" : "\(outboxCount) pending")
+                                .font(.appMono)
+                                .foregroundStyle(AppTheme.ColorPalette.lightOnDark)
                         }
+
+                        Text(statusText)
+                            .font(.appDisplay)
+                            .foregroundStyle(AppTheme.ColorPalette.linen)
+
+                        Button(isUploading ? "Uploading..." : "Scan Mail Item") {
+                            isShowingScanner = true
+                        }
+                        .buttonStyle(PrimaryUtilityButtonStyle())
+                        .disabled(isUploading || isRetryingOutbox || !VNDocumentCameraViewController.isSupported)
+
+                        MetricStrip(items: [
+                            .init(label: "Batch", value: batchId),
+                            .init(label: "Scanned", value: "\(itemCount)"),
+                            .init(label: "Label", value: selectedCategory.label),
+                        ])
                     }
 
-                    TextField("Optional note", text: $note, axis: .vertical)
-                        .lineLimit(2...4)
+                    nextItemDetailsSection
+                    feedbackSection
+                    secondaryActionsSection
                 }
-
-                if let lastError {
-                    Section {
-                        Text(lastError)
-                            .foregroundStyle(.red)
-                    }
-                }
-
-                Section {
-                    Button(isUploading ? "Uploading..." : "Scan Mail Item") {
-                        isShowingScanner = true
-                    }
-                    .disabled(isUploading || isRetryingOutbox || !VNDocumentCameraViewController.isSupported)
-
-                    Button(isRetryingOutbox ? "Retrying..." : "Retry Pending Uploads") {
-                        Task { await retryOutbox() }
-                    }
-                    .disabled(isUploading || isRetryingOutbox || outboxCount == 0)
-
-                    Button("Start New Batch") {
-                        batchId = BatchClock.makeBatchId()
-                        itemCount = 0
-                        statusText = "Ready"
-                        lastError = nil
-                    }
-
-                    Button("Forget Pairing", role: .destructive) {
-                        onResetPairing()
-                    }
-                }
+                .padding(AppTheme.Spacing.sm)
             }
+            .background(AppTheme.ColorPalette.linen.ignoresSafeArea())
             .navigationTitle("Mail Bills Scan")
             .sheet(isPresented: $isShowingScanner) {
                 DocumentScannerView(
@@ -92,6 +83,66 @@ struct ScanView: View {
             .task {
                 refreshOutboxCount()
             }
+        }
+    }
+
+    private var nextItemDetailsSection: some View {
+        VStack(alignment: .leading, spacing: AppTheme.Spacing.sm) {
+            SectionLabel(text: "Next Item Details")
+
+            Picker("Label", selection: $selectedCategory) {
+                ForEach(MailCategory.allCases) { category in
+                    Text(category.label).tag(category)
+                }
+            }
+            .pickerStyle(.menu)
+
+            TextField("Optional note", text: $note, axis: .vertical)
+                .lineLimit(2...4)
+                .padding(12)
+                .background(Color.white)
+                .overlay(
+                    RoundedRectangle(cornerRadius: AppTheme.CornerRadius.control, style: .continuous)
+                        .stroke(AppTheme.ColorPalette.linenBorder, lineWidth: 1)
+                )
+        }
+    }
+
+    @ViewBuilder
+    private var feedbackSection: some View {
+        if let lastError {
+            FeedbackBanner(title: "Attention needed", message: lastError, tone: .warning)
+        } else if statusText.hasPrefix("Uploaded ") {
+            FeedbackBanner(title: "Upload complete", message: statusText, tone: .success)
+        } else if statusText == "Saved pending upload" {
+            FeedbackBanner(title: "Saved for retry", message: "The document stayed on the phone and can be retried later.", tone: .warning)
+        } else {
+            FeedbackBanner(title: "Ready", message: "No pending issues. Scan the next mail item when ready.", tone: .neutral)
+        }
+    }
+
+    private var secondaryActionsSection: some View {
+        VStack(alignment: .leading, spacing: AppTheme.Spacing.sm) {
+            SectionLabel(text: "Operations")
+
+            Button(isRetryingOutbox ? "Retrying..." : "Retry Pending Uploads") {
+                Task { await retryOutbox() }
+            }
+            .buttonStyle(.bordered)
+            .disabled(isUploading || isRetryingOutbox || outboxCount == 0)
+
+            Button("Start New Batch") {
+                batchId = BatchClock.makeBatchId()
+                itemCount = 0
+                statusText = "Ready"
+                lastError = nil
+            }
+            .buttonStyle(.bordered)
+
+            Button("Forget Pairing", role: .destructive) {
+                onResetPairing()
+            }
+            .buttonStyle(.bordered)
         }
     }
 
@@ -138,10 +189,10 @@ struct ScanView: View {
                 itemCount = nextCount
                 note = ""
                 refreshOutboxCount()
-                lastError = "Upload failed and was saved for retry: \(error.localizedDescription)"
+                lastError = "Upload failed on the network, but the document was saved locally for retry."
                 statusText = "Saved pending upload"
             } catch {
-                lastError = "Upload failed and could not be saved for retry: \(error.localizedDescription)"
+                lastError = "Upload failed and the document could not be saved for retry: \(error.localizedDescription)"
                 statusText = "Upload failed"
             }
         }

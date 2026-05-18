@@ -39,10 +39,6 @@ struct PairingView: View {
 
                     SectionLabel(text: "Manual Pairing")
                     manualPairingSection
-
-                    if let message {
-                        FeedbackBanner(title: "Pairing issue", message: message, tone: .error)
-                    }
                 }
                 .padding(AppTheme.Spacing.sm)
             }
@@ -54,6 +50,7 @@ struct PairingView: View {
                     showingQRScanner = false
                     pairFromScannedText(scannedText)
                 }
+                .ignoresSafeArea(edges: .bottom)
                 .background(AppTheme.ColorPalette.charcoal.ignoresSafeArea())
                 .navigationTitle("Scan Pairing QR")
                 .navigationBarTitleDisplayMode(.inline)
@@ -71,39 +68,29 @@ struct PairingView: View {
 
     private var manualPairingSection: some View {
         VStack(alignment: .leading, spacing: AppTheme.Spacing.sm) {
+            Text("Endpoint")
+                .font(.headline)
             TextField("http://yoyodyne:8765/api/mail-bills/intake", text: $endpoint)
                 .textInputAutocapitalization(.never)
                 .autocorrectionDisabled()
                 .keyboardType(.URL)
-                .padding(12)
-                .background(Color.white)
-                .overlay(
-                    RoundedRectangle(cornerRadius: AppTheme.CornerRadius.control, style: .continuous)
-                        .stroke(AppTheme.ColorPalette.linenBorder, lineWidth: 1)
-                )
+                .fieldChrome(cornerRadius: AppTheme.CornerRadius.control)
 
+            Text("Token")
+                .font(.headline)
             SecureField("Bearer token", text: $token)
                 .textInputAutocapitalization(.never)
                 .autocorrectionDisabled()
-                .padding(12)
-                .background(Color.white)
-                .overlay(
-                    RoundedRectangle(cornerRadius: AppTheme.CornerRadius.control, style: .continuous)
-                        .stroke(AppTheme.ColorPalette.linenBorder, lineWidth: 1)
-                )
+                .fieldChrome(cornerRadius: AppTheme.CornerRadius.control)
 
             DisclosureGroup("Paste pairing JSON instead") {
                 VStack(alignment: .leading, spacing: AppTheme.Spacing.sm) {
                     TextEditor(text: $pairingJSON)
                         .frame(minHeight: 120)
                         .padding(8)
-                        .background(Color.white)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: AppTheme.CornerRadius.card, style: .continuous)
-                                .stroke(AppTheme.ColorPalette.linenBorder, lineWidth: 1)
-                        )
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
+                        .fieldChrome(cornerRadius: AppTheme.CornerRadius.card)
 
                     Button("Fill Fields from JSON") {
                         fillFromJSON()
@@ -111,6 +98,10 @@ struct PairingView: View {
                     .buttonStyle(.bordered)
                 }
                 .padding(.top, AppTheme.Spacing.xs)
+            }
+
+            if let message {
+                FeedbackBanner(title: "Pairing issue", message: message, tone: .error)
             }
 
             Button("Pair with Mac") {
@@ -168,5 +159,19 @@ struct PairingView: View {
         }
         cleaned = cleaned.trimmingCharacters(in: CharacterSet(charactersIn: "\","))
         return cleaned
+    }
+}
+
+private extension View {
+    func fieldChrome(cornerRadius: CGFloat) -> some View {
+        clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+            .background(
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                    .fill(Color.white)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                    .stroke(AppTheme.ColorPalette.linenBorder, lineWidth: 1)
+            )
     }
 }

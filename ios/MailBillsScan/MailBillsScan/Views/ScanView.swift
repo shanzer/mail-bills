@@ -76,6 +76,7 @@ struct ScanView: View {
                     },
                     onError: { error in
                         isShowingScanner = false
+                        statusText = "Scan failed"
                         lastError = error.localizedDescription
                     }
                 )
@@ -110,12 +111,12 @@ struct ScanView: View {
 
     @ViewBuilder
     private var feedbackSection: some View {
-        if let lastError {
+        if statusText == "Saved pending upload" {
+            FeedbackBanner(title: "Saved for retry", message: "The document stayed on the phone and can be retried later.", tone: .warning)
+        } else if let lastError {
             FeedbackBanner(title: "Attention needed", message: lastError, tone: .warning)
         } else if statusText.hasPrefix("Uploaded ") {
             FeedbackBanner(title: "Upload complete", message: statusText, tone: .success)
-        } else if statusText == "Saved pending upload" {
-            FeedbackBanner(title: "Saved for retry", message: "The document stayed on the phone and can be retried later.", tone: .warning)
         } else {
             FeedbackBanner(title: "Ready", message: "No pending issues. Scan the next mail item when ready.", tone: .neutral)
         }
@@ -149,6 +150,7 @@ struct ScanView: View {
     @MainActor
     private func upload(images: [UIImage]) async {
         guard !images.isEmpty else {
+            statusText = "Scan failed"
             lastError = "No scanned pages were returned."
             return
         }
@@ -228,6 +230,7 @@ struct ScanView: View {
         do {
             outboxCount = try outboxStore.pendingCount()
         } catch {
+            statusText = "Outbox unavailable"
             lastError = error.localizedDescription
         }
     }

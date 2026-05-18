@@ -76,34 +76,73 @@ struct FeedbackBanner: View {
 }
 
 struct MetricStrip: View {
-    let items: [(label: String, value: String)]
+    struct MetricItem: Identifiable, Hashable {
+        let id: String
+        let label: String
+        let value: String
+
+        init(id: String? = nil, label: String, value: String) {
+            self.id = id ?? label
+            self.label = label
+            self.value = value
+        }
+    }
+
+    let items: [MetricItem]
 
     var body: some View {
-        HStack(spacing: AppTheme.Spacing.sm) {
-            ForEach(Array(items.enumerated()), id: \.offset) { _, item in
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(item.label.uppercased())
-                        .font(.appSectionLabel)
-                        .tracking(2.5)
-                        .foregroundStyle(AppTheme.ColorPalette.lightOnDark)
-                    Text(item.value)
-                        .font(.appMono)
-                        .foregroundStyle(AppTheme.ColorPalette.linen)
+        ViewThatFits(in: .horizontal) {
+            HStack(alignment: .top, spacing: AppTheme.Spacing.sm) {
+                ForEach(items) { item in
+                    metricView(for: item)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
             }
+            VStack(alignment: .leading, spacing: AppTheme.Spacing.sm) {
+                ForEach(items) { item in
+                    metricView(for: item)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+            }
+        }
+    }
+
+    private func metricView(for item: MetricItem) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(item.label.uppercased())
+                .font(.appSectionLabel)
+                .tracking(2.5)
+                .foregroundStyle(AppTheme.ColorPalette.lightOnDark)
+            Text(item.value)
+                .font(.appMono)
+                .foregroundStyle(AppTheme.ColorPalette.linen)
         }
     }
 }
 
 struct PrimaryUtilityButtonStyle: ButtonStyle {
+    @Environment(\.isEnabled) private var isEnabled
+
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(.headline)
             .frame(maxWidth: .infinity)
             .padding(.vertical, 16)
-            .background(configuration.isPressed ? AppTheme.ColorPalette.amberDark : AppTheme.ColorPalette.amber)
-            .foregroundStyle(AppTheme.ColorPalette.charcoal)
+            .background(backgroundColor(isPressed: configuration.isPressed))
+            .foregroundStyle(foregroundColor)
+            .opacity(isEnabled ? 1 : 0.7)
             .clipShape(RoundedRectangle(cornerRadius: AppTheme.CornerRadius.control, style: .continuous))
+    }
+
+    private var foregroundColor: Color {
+        isEnabled ? AppTheme.ColorPalette.charcoal : AppTheme.ColorPalette.linenDark
+    }
+
+    private func backgroundColor(isPressed: Bool) -> Color {
+        if !isEnabled {
+            return AppTheme.ColorPalette.slate
+        }
+
+        return isPressed ? AppTheme.ColorPalette.amberDark : AppTheme.ColorPalette.amber
     }
 }

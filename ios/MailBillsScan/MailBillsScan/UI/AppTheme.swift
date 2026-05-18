@@ -32,7 +32,7 @@ enum AppTheme {
 
 extension Font {
     static let appDisplay = Font.custom("Georgia", size: 30, relativeTo: .title)
-    static let appSectionLabel = Font.system(size: 10, weight: .semibold, design: .default)
-    static let appBody = Font.system(size: 16, weight: .regular, design: .default)
-    static let appMono = Font.system(size: 14, weight: .medium, design: .monospaced)
+    static let appSectionLabel = Font.system(.caption2, design: .default, weight: .semibold)
+    static let appBody = Font.system(.body, design: .default, weight: .regular)
+    static let appMono = Font.system(.footnote, design: .monospaced, weight: .medium)
 }

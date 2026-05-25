@@ -21,6 +21,7 @@ async function main(argv: string[]): Promise<number> {
   if (command === "api") {
     if (option(rest, "--host")) config.intakeUpload.host = option(rest, "--host")!;
     if (option(rest, "--port")) config.intakeUpload.port = Number(option(rest, "--port"));
+    if (option(rest, "--log-level")) config.logging.level = option(rest, "--log-level") as typeof config.logging.level;
     const { url } = await startApi(config);
     console.log(`Mail Bills API listening at ${url}`);
     return await new Promise(() => undefined);
@@ -113,7 +114,7 @@ function printHelp(): void {
   console.log(`Usage: npm run mail-bills -- <command> [options]
 
 Commands:
-  api --config <path> [--host <host>] [--port <port>]
+  api --config <path> [--host <host>] [--port <port>] [--log-level <silent|fatal|error|warn|info|debug|trace>]
   bootstrap [--dry-run]
   import [--dry-run] [--stable-delay-ms <ms>]
   process-pending [--dry-run]

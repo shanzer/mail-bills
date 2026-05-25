@@ -15,9 +15,9 @@ import { PipelineScheduler } from "./scheduler.js";
 import { buildPairingPayload, ensureConfigToken, svgQr } from "./pairing.js";
 
 export function createApi(config: MailBillsConfig): FastifyInstance {
-  const app = Fastify({ logger: false, bodyLimit: 50 * 1024 * 1024 });
+  const app = Fastify({ logger: fastifyLogger(config), bodyLimit: 50 * 1024 * 1024 });
   app.register(multipart, { limits: { fileSize: 50 * 1024 * 1024, files: 2 } });
-  const scheduler = new PipelineScheduler(config);
+  const scheduler = new PipelineScheduler(config, app.log);
   scheduler.start();
   app.addHook("onClose", async () => scheduler.stop());
 
@@ -170,8 +170,20 @@ export function createApi(config: MailBillsConfig): FastifyInstance {
 
 export async function startApi(config: MailBillsConfig): Promise<{ app: FastifyInstance; url: string }> {
   const app = createApi(config);
+  app.log.info({
+    host: config.intakeUpload.host,
+    port: config.intakeUpload.port,
+    configPath: config.configPath,
+    rootDir: config.rootDir,
+    ledgerPath: configPaths(config).ledgerPath
+  }, "starting Mail Bills API");
   const address = await app.listen({ host: config.intakeUpload.host, port: config.intakeUpload.port });
+  app.log.info({ address }, "Mail Bills API listening");
   return { app, url: address };
+}
+
+function fastifyLogger(config: MailBillsConfig): false | { level: string } {
+  return config.logging.level === "silent" ? false : { level: config.logging.level };
 }
 
 function initializedLedger(config: MailBillsConfig): Ledger {

@@ -43,6 +43,9 @@ export interface MailBillsConfig {
   icloudIntakeDir?: string;
   icloudErrorDir?: string;
   notionDatabaseName: string;
+  logging: {
+    level: "silent" | "fatal" | "error" | "warn" | "info" | "debug" | "trace";
+  };
   pipelineSchedule: {
     enabled: boolean;
     intervalMinutes: number;

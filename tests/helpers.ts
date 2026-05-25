@@ -14,6 +14,9 @@ export function makeConfig(root: string, token = "secret-token"): MailBillsConfi
     icloudIntakeDir: path.join(root, "icloud", "Intake"),
     icloudErrorDir: path.join(root, "icloud", "Error"),
     notionDatabaseName: "Mail Bills Test",
+    logging: {
+      level: "silent"
+    },
     pipelineSchedule: {
       enabled: false,
       intervalMinutes: 180,

@@ -5,6 +5,7 @@ import { expandUser, optionalText, ownerHomeFromConfigPath } from "./paths.js";
 import type { MailBillsConfig } from "./types.js";
 
 const DEFAULT_ROOT = "/Users/buckaroo/.hermes/projects/mail-bills";
+const LOG_LEVELS = new Set(["silent", "fatal", "error", "warn", "info", "debug", "trace"]);
 type RawConfig = Record<string, any>;
 
 export function loadConfig(configPath = path.resolve("config.yaml")): MailBillsConfig {
@@ -15,6 +16,7 @@ export function loadConfig(configPath = path.resolve("config.yaml")): MailBillsC
   const upload = raw.intake_upload ?? {};
   const ocr = raw.ocr ?? {};
   const pipelineSchedule = raw.pipeline_schedule ?? {};
+  const logging = raw.logging ?? {};
 
   return {
     configPath: resolvedConfigPath,
@@ -22,6 +24,9 @@ export function loadConfig(configPath = path.resolve("config.yaml")): MailBillsC
     icloudIntakeDir: optionalPath(raw.icloud_intake_dir, ownerHome),
     icloudErrorDir: optionalPath(raw.icloud_error_dir, ownerHome),
     notionDatabaseName: raw.notion_database_name ?? "Mail & Bills",
+    logging: {
+      level: loggingLevel(logging.level ?? raw.log_level ?? "info")
+    },
     pipelineSchedule: {
       enabled: Boolean(pipelineSchedule.enabled ?? true),
       intervalMinutes: Number(pipelineSchedule.interval_minutes ?? 180),
@@ -45,6 +50,12 @@ export function loadConfig(configPath = path.resolve("config.yaml")): MailBillsC
       lowTextThreshold: Number(ocr.low_text_threshold ?? 40)
     }
   };
+}
+
+function loggingLevel(value: unknown): MailBillsConfig["logging"]["level"] {
+  const level = String(value ?? "info").trim().toLowerCase();
+  if (LOG_LEVELS.has(level)) return level as MailBillsConfig["logging"]["level"];
+  return "info";
 }
 
 export function configPaths(config: MailBillsConfig) {

@@ -16,6 +16,16 @@ describe("REST API", () => {
     await app.close();
   });
 
+  it("uses the configured API log level", async () => {
+    const config = makeConfig(tempRoot("mail-bills-api-"));
+    config.logging.level = "debug";
+    const app = createApi(config);
+
+    expect(app.log.level).toBe("debug");
+
+    await app.close();
+  });
+
   it("serves the functional UI assets", async () => {
     const app = createApi(makeConfig(tempRoot("mail-bills-api-")));
     const html = await app.inject({ method: "GET", url: "/" });

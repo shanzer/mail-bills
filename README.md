@@ -16,10 +16,26 @@ npm run mail-bills -- import --config ../mail-bills/config.yaml --dry-run
 npm run mail-bills -- process-pending --config ../mail-bills/config.yaml --dry-run
 npm run mail-bills -- pairing --config ../mail-bills/config.yaml --base-url http://yoyodyne:8765 --qr
 npm run start -- --host 0.0.0.0 --port 8765
+npm run start -- --host 0.0.0.0 --port 8765 --log-level debug
 ```
 
 `npm run start` runs the compiled `dist/src/cli.js`, so run `npm run build` after source changes.
 Use a phone-reachable host and port for pairing, such as `http://yoyodyne:8765`; `127.0.0.1` only works from the Mac itself.
+
+## Logging
+
+The API uses Fastify/Pino structured logs. Configure the default level in `config.yaml`:
+
+```yaml
+logging:
+  level: info
+```
+
+Accepted levels are `silent`, `fatal`, `error`, `warn`, `info`, `debug`, and `trace`. The `api` command can override the config for one run:
+
+```bash
+npm run start -- --log-level debug
+```
 
 ## REST API
 

@@ -1,12 +1,14 @@
+import fs from "node:fs";
 import type { DocumentRecord, MailBillsConfig } from "./types.js";
 import { CATEGORY_VALUES } from "./types.js";
 import { Ledger } from "./ledger.js";
 import { REVIEW_DECISIONS, resolveReview } from "./review.js";
 import { quarantineDocument } from "./quarantine.js";
 import { NotionAdapter } from "./notion.js";
+import { uploadPdfToPaperless, type PaperlessUploader } from "./paperless.js";
 import { textValue } from "./paths.js";
 
-const DOCUMENT_ACTIONS = new Set([...REVIEW_DECISIONS, "complete", "delete", "update-fields", "actionable"]);
+const DOCUMENT_ACTIONS = new Set([...REVIEW_DECISIONS, "complete", "delete", "update-fields", "actionable", "send-to-paperless"]);
 const GENERAL_ARCHIVE_STATUSES = new Set(["Actionable", "Waiting", "Completed", "Archived"]);
 const CATEGORY_SET = new Set<string>(CATEGORY_VALUES);
 
@@ -32,6 +34,7 @@ export async function applyDocumentAction(input: {
   deleteChoice?: string;
   category?: string | null;
   shortcutLabel?: string | null;
+  paperlessUploader?: PaperlessUploader;
 }): Promise<DocumentActionResult> {
   const dryRun = Boolean(input.dryRun);
   try {
@@ -42,12 +45,59 @@ export async function applyDocumentAction(input: {
     if (input.action === "actionable") return markActionable(document, input, dryRun);
     if (input.action === "complete") return completeDocument(document, input.ledger, dryRun);
     if (input.action === "delete") return deleteDocument(input, dryRun);
+    if (input.action === "send-to-paperless") return await sendToPaperless(document, input, dryRun);
     if (input.action === "archive" && GENERAL_ARCHIVE_STATUSES.has(textValue(document.status))) return archiveDocument(document, input.ledger, dryRun);
     const review = await resolveReview({ ...input, decision: input.action, dryRun });
     return { documentId: input.documentId, action: input.action, ok: true, dryRun, payload: { planned_update: review.plannedUpdate } };
   } catch (error) {
     return { documentId: input.documentId, action: input.action, ok: false, dryRun, payload: {}, error: error instanceof Error ? error.message : String(error) };
   }
+}
+
+async function sendToPaperless(document: DocumentRecord, input: Parameters<typeof applyDocumentAction>[0], dryRun: boolean): Promise<DocumentActionResult> {
+  const pdfPath = textValue(document.local_pdf_path);
+  if (!pdfPath) throw new Error("document has no local_pdf_path");
+  if (!fs.existsSync(pdfPath)) throw new Error(`PDF file is missing: ${pdfPath}`);
+  if (dryRun) {
+    return {
+      documentId: document.document_id,
+      action: "send-to-paperless",
+      ok: true,
+      dryRun: true,
+      payload: { uploaded: false, pdf_path: pdfPath }
+    };
+  }
+
+  const uploader = input.paperlessUploader ?? uploadPdfToPaperless;
+  const response = sanitizePaperlessResponse(await uploader(pdfPath));
+  input.ledger.appendEvent({
+    documentId: document.document_id,
+    batchId: document.batch_id,
+    eventType: "paperless_uploaded",
+    payload: { pdf_path: pdfPath, paperless_response: response }
+  });
+  return {
+    documentId: document.document_id,
+    action: "send-to-paperless",
+    ok: true,
+    dryRun: false,
+    payload: { uploaded: true, pdf_path: pdfPath, paperless_response: response }
+  };
+}
+
+function sanitizePaperlessResponse(value: unknown): Record<string, unknown> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return { value: String(value ?? "") };
+  const blocked = new Set(["apiKey", "apikey", "token", "authorization", "Authorization"]);
+  return Object.fromEntries(
+    Object.entries(value as Record<string, unknown>)
+      .filter(([key]) => !blocked.has(key))
+      .map(([key, entry]) => [key, sanitizeResponseValue(entry)])
+  );
+}
+
+function sanitizeResponseValue(value: unknown): string | number | boolean | null {
+  if (typeof value === "string" || typeof value === "number" || typeof value === "boolean" || value === null) return value;
+  return JSON.stringify(value);
 }
 
 function completeDocument(document: DocumentRecord, ledger: Ledger, dryRun: boolean): DocumentActionResult {

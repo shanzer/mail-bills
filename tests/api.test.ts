@@ -25,9 +25,11 @@ describe("REST API", () => {
     expect(html.headers["content-type"]).toContain("text/html");
     expect(html.body).toContain("Mail Bills");
     expect(html.body).toContain("/ui/app.js");
+    expect(html.body).toContain("Send to Paperless");
     expect(js.statusCode).toBe(200);
     expect(js.body).toContain("/api/documents?limit=500");
     expect(js.body).toContain("/api/pipeline/process-pending");
+    expect(js.body).toContain("send-to-paperless");
     await app.close();
   });
 

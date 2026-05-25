@@ -134,6 +134,7 @@ export const uiHtml = `<!doctype html>
               <button class="button button-primary" type="button" data-doc-action="actionable"><span data-icon="play"></span>Actionable</button>
               <button class="button button-secondary" type="button" data-doc-action="archive"><span data-icon="archive"></span>Archive</button>
               <button class="button button-secondary" type="button" data-doc-action="complete"><span data-icon="circle-check"></span>Complete</button>
+              <button class="button button-secondary" type="button" data-doc-action="send-to-paperless"><span data-icon="upload-cloud"></span>Send to Paperless</button>
               <button class="button button-danger" type="button" data-doc-action="delete"><span data-icon="trash-2"></span>Delete</button>
             </div>
           </div>
@@ -917,6 +918,7 @@ function icon(name) {
     "shield-check": "<path d='M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10'/><path d='m9 12 2 2 4-5'/>",
     "tag": "<path d='M20 10 12 2H4v8l8 8z'/><circle cx='7.5' cy='7.5' r='1'/>",
     "trash-2": "<path d='M3 6h18'/><path d='M8 6V4h8v2'/><path d='M19 6l-1 14H6L5 6'/><path d='M10 11v6'/><path d='M14 11v6'/>",
+    "upload-cloud": "<path d='M16 16l-4-4-4 4'/><path d='M12 12v9'/><path d='M20.4 18.9A5 5 0 0 0 18 9h-1.3A8 8 0 1 0 4 16.3'/>",
     "x": "<path d='M18 6 6 18'/><path d='m6 6 12 12'/>"
   };
   return "<svg class='icon' viewBox='0 0 24 24' aria-hidden='true'>" + (paths[name] || paths.inbox) + "</svg>";
@@ -1144,7 +1146,7 @@ async function applyAction(action) {
     method: "POST",
     body: JSON.stringify(body)
   });
-  toast(result.action + " applied to " + doc.document_id);
+  toast(action === "send-to-paperless" ? "Sent to Paperless: " + doc.document_id : result.action + " applied to " + doc.document_id);
   await loadDocuments();
 }
 

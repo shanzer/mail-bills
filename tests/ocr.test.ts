@@ -78,3 +78,48 @@ describe("OCR helper path", () => {
     }));
   });
 });
+
+describe("extractPdfText", () => {
+  beforeEach(() => {
+    vi.resetModules();
+    vi.doUnmock("node:url");
+    execFileSyncMock.mockReset();
+  });
+
+  it("surfaces a Vision OCR helper failure when low embedded text requires fallback", async () => {
+    const pdfBytes = Buffer.from("%PDF-1.4");
+    const getTextMock = vi.fn().mockResolvedValue({ text: "tiny", total: 1 });
+    const destroyMock = vi.fn().mockResolvedValue(undefined);
+    const visionError = new Error("vision helper failed");
+
+    vi.doMock("node:fs", () => ({
+      default: {
+        readFileSync: vi.fn(() => pdfBytes)
+      }
+    }));
+    vi.doMock("pdf-parse", () => ({
+      PDFParse: class {
+        async getText() {
+          return getTextMock();
+        }
+
+        async destroy() {
+          return destroyMock();
+        }
+      }
+    }));
+
+    const { extractPdfText } = await import("../src/ocr.js");
+
+    await expect(extractPdfText({
+      pdfPath: "/tmp/low-text.pdf",
+      ocrConfig: makeOcrConfig({ visionFallbackEnabled: true, lowTextThreshold: 40 }),
+      visionOcrRunner: () => {
+        throw visionError;
+      }
+    })).rejects.toThrow("vision helper failed");
+
+    expect(getTextMock).toHaveBeenCalledTimes(1);
+    expect(destroyMock).toHaveBeenCalledTimes(1);
+  });
+});

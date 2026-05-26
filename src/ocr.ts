@@ -34,19 +34,14 @@ export async function extractPdfText(input: {
   let text = normalizeText(parsed.text ?? "");
   let pageCount = Number(parsed.total ?? 0);
   let extractionMethod: "embedded" | "vision" = "embedded";
-  let visionError: string | undefined;
   let needsFallback = text.length < input.ocrConfig.lowTextThreshold;
 
   if (needsFallback && input.ocrConfig.visionFallbackEnabled) {
-    try {
-      const runner = input.visionOcrRunner ?? runVisionOcr;
-      const visionText = normalizeText(runner(input.pdfPath, input.ocrConfig));
-      if (visionText.length > text.length) {
-        text = visionText;
-        extractionMethod = "vision";
-      }
-    } catch (error) {
-      visionError = error instanceof Error ? error.message : String(error);
+    const runner = input.visionOcrRunner ?? runVisionOcr;
+    const visionText = normalizeText(runner(input.pdfPath, input.ocrConfig));
+    if (visionText.length > text.length) {
+      text = visionText;
+      extractionMethod = "vision";
     }
     needsFallback = text.length < input.ocrConfig.lowTextThreshold;
   }
@@ -59,7 +54,7 @@ export async function extractPdfText(input: {
     pageCount,
     confidence,
     needsFallback,
-    reviewReason: fallbackReviewReason(input.ocrConfig, needsFallback, extractionMethod, visionError),
+    reviewReason: fallbackReviewReason(input.ocrConfig, needsFallback, extractionMethod),
     summary: modelSummaryEnabled ? summarizeWithModel(text, input.ocrConfig) : summarize(text),
     modelSummaryEnabled,
     modelProvider: input.ocrConfig.modelProvider,
@@ -123,9 +118,8 @@ function normalizeText(text: string): string {
   return text.replace(/\r\n/g, "\n").replace(/\r/g, "\n").split("\n").map((line) => line.trim()).filter(Boolean).join("\n").trim();
 }
 
-function fallbackReviewReason(ocrConfig: OcrConfig, needsFallback: boolean, extractionMethod: "embedded" | "vision", visionError?: string): string | undefined {
+function fallbackReviewReason(ocrConfig: OcrConfig, needsFallback: boolean, extractionMethod: "embedded" | "vision"): string | undefined {
   if (!needsFallback) return undefined;
-  if (visionError) return `Vision OCR fallback failed: ${visionError}`;
   if (extractionMethod === "vision") return "low text after Vision OCR fallback";
   if (ocrConfig.modelFallbackEnabled) return `needs OCR/model fallback: ${ocrConfig.modelProvider}/${ocrConfig.modelName}`;
   return "needs OCR/model fallback (disabled)";

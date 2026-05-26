@@ -1,21 +1,32 @@
 import SwiftUI
 
 struct WorkSurface<Content: View>: View {
+    let spacing: CGFloat
+    let padding: CGFloat
+    let cornerRadius: CGFloat
     let content: Content
 
-    init(@ViewBuilder content: () -> Content) {
+    init(
+        spacing: CGFloat = AppTheme.Spacing.sm,
+        padding: CGFloat = AppTheme.Spacing.sm,
+        cornerRadius: CGFloat = AppTheme.CornerRadius.panel,
+        @ViewBuilder content: () -> Content
+    ) {
+        self.spacing = spacing
+        self.padding = padding
+        self.cornerRadius = cornerRadius
         self.content = content()
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: AppTheme.Spacing.sm) {
+        VStack(alignment: .leading, spacing: spacing) {
             content
         }
-        .padding(AppTheme.Spacing.sm)
+        .padding(padding)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(AppTheme.ColorPalette.charcoal)
         .foregroundStyle(AppTheme.ColorPalette.linen)
-        .clipShape(RoundedRectangle(cornerRadius: AppTheme.CornerRadius.panel, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
     }
 }
 
@@ -76,30 +87,29 @@ struct FeedbackBanner: View {
 }
 
 struct MetricStrip: View {
-    struct MetricItem: Identifiable, Hashable {
-        let id: String
+    struct MetricItem: Hashable {
         let label: String
         let value: String
 
-        init(id: String? = nil, label: String, value: String) {
-            self.id = id ?? label
+        init(label: String, value: String) {
             self.label = label
             self.value = value
         }
     }
 
     let items: [MetricItem]
+    var spacing: CGFloat = AppTheme.Spacing.sm
 
     var body: some View {
         ViewThatFits(in: .horizontal) {
-            HStack(alignment: .top, spacing: AppTheme.Spacing.sm) {
-                ForEach(items) { item in
+            HStack(alignment: .top, spacing: spacing) {
+                ForEach(Array(items.enumerated()), id: \.offset) { _, item in
                     metricView(for: item)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
             }
-            VStack(alignment: .leading, spacing: AppTheme.Spacing.sm) {
-                ForEach(items) { item in
+            VStack(alignment: .leading, spacing: spacing) {
+                ForEach(Array(items.enumerated()), id: \.offset) { _, item in
                     metricView(for: item)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
@@ -127,7 +137,7 @@ struct PrimaryUtilityButtonStyle: ButtonStyle {
         configuration.label
             .font(.headline)
             .frame(maxWidth: .infinity)
-            .padding(.vertical, 16)
+            .padding(.vertical, 14)
             .background(backgroundColor(isPressed: configuration.isPressed))
             .foregroundStyle(foregroundColor)
             .opacity(isEnabled ? 1 : 0.7)

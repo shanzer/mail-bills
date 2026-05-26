@@ -356,7 +356,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = "";
+				DEVELOPMENT_TEAM = B5SYZ74CFK;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = MailBillsScan/Resources/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
@@ -365,7 +365,7 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 0.1;
-				PRODUCT_BUNDLE_IDENTIFIER = com.buckaroo.mailbillsscan;
+				PRODUCT_BUNDLE_IDENTIFIER = com.foobar.mailscan;
 				PRODUCT_NAME = "Mail Bills Scan";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				SUPPORTS_MACCATALYST = NO;
@@ -383,7 +383,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = "";
+				DEVELOPMENT_TEAM = B5SYZ74CFK;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = MailBillsScan/Resources/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
@@ -392,7 +392,7 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 0.1;
-				PRODUCT_BUNDLE_IDENTIFIER = com.buckaroo.mailbillsscan;
+				PRODUCT_BUNDLE_IDENTIFIER = com.foobar.mailscan;
 				PRODUCT_NAME = "Mail Bills Scan";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				SUPPORTS_MACCATALYST = NO;

@@ -7,7 +7,7 @@
     "build": "tsc -p tsconfig.json",
     "check": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
-    "start": "node dist/src/cli.js api --config ../mail-bills/config.yaml",
+    "start": "dotenv -e .env -- node dist/src/cli.js api --config ../mail-bills/config.yaml",
     "mail-bills": "node dist/src/cli.js"
   },
   "dependencies": {

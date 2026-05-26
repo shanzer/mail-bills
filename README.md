@@ -28,6 +28,8 @@ When `ocr.vision_fallback_enabled` is on, the Vision OCR fallback expects a comp
 
 The helper binary is macOS-specific and built for the host architecture, so each machine may need to build its own `dist/utils/vision_ocr`.
 
+If you have an older config that still points `ocr.vision_helper_path` at `scripts/mail_bills/vision_ocr.swift`, remove that override or repoint it to a built helper binary before using Vision fallback.
+
 Build the helper manually with:
 
 ```bash

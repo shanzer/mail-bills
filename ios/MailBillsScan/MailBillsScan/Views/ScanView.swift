@@ -134,7 +134,11 @@ struct ScanView: View {
     @ViewBuilder
     private var feedbackSection: some View {
         if statusText == "Saved pending upload" {
-            FeedbackBanner(title: "Saved for retry", message: "The document stayed on the phone and can be retried later.", tone: .warning)
+            FeedbackBanner(
+                title: "Saved for retry",
+                message: lastError ?? "The document stayed on the phone and can be retried later.",
+                tone: .warning
+            )
         } else if let lastError {
             FeedbackBanner(title: "Attention needed", message: lastError, tone: .warning)
         } else if statusText.hasPrefix("Uploaded ") {
@@ -283,7 +287,7 @@ struct ScanView: View {
                 lastError = "Upload failed: \(uploadErrorMessage). The document was saved locally for retry."
                 statusText = "Saved pending upload"
             } catch let saveError {
-                lastError = "Upload failed and the document could not be saved for retry: \(saveError.localizedDescription)"
+                lastError = "Upload failed: \(uploadErrorMessage). The document could not be saved for retry: \(saveError.localizedDescription)"
                 statusText = "Upload failed"
             }
         }

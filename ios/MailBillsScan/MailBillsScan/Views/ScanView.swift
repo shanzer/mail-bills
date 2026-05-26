@@ -67,6 +67,8 @@ struct ScanView: View {
                         .foregroundStyle(AppTheme.ColorPalette.lightOnDark)
                     Text(pairing.endpoint.host ?? pairing.endpoint.absoluteString)
                         .font(.headline)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
                 }
                 Spacer()
                 VStack(alignment: .trailing, spacing: 4) {
@@ -272,15 +274,16 @@ struct ScanView: View {
             note = ""
             statusText = "Uploaded \(documentId)"
         } catch {
+            let uploadErrorMessage = error.localizedDescription
             do {
                 try outboxStore.save(documentId: documentId, pdf: pdf, sidecar: sidecarData)
                 itemCount = nextCount
                 note = ""
                 refreshOutboxCount()
-                lastError = "Upload failed on the network, but the document was saved locally for retry."
+                lastError = "Upload failed: \(uploadErrorMessage). The document was saved locally for retry."
                 statusText = "Saved pending upload"
-            } catch {
-                lastError = "Upload failed and the document could not be saved for retry: \(error.localizedDescription)"
+            } catch let saveError {
+                lastError = "Upload failed and the document could not be saved for retry: \(saveError.localizedDescription)"
                 statusText = "Upload failed"
             }
         }

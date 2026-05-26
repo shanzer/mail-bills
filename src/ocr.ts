@@ -1,7 +1,7 @@
 import { execFileSync } from "node:child_process";
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { PDFParse } from "pdf-parse";
 import type { OcrConfig } from "./types.js";
 import { Ledger } from "./ledger.js";
@@ -34,19 +34,14 @@ export async function extractPdfText(input: {
   let text = normalizeText(parsed.text ?? "");
   let pageCount = Number(parsed.total ?? 0);
   let extractionMethod: "embedded" | "vision" = "embedded";
-  let visionError: string | undefined;
   let needsFallback = text.length < input.ocrConfig.lowTextThreshold;
 
   if (needsFallback && input.ocrConfig.visionFallbackEnabled) {
-    try {
-      const runner = input.visionOcrRunner ?? runVisionOcr;
-      const visionText = normalizeText(runner(input.pdfPath, input.ocrConfig));
-      if (visionText.length > text.length) {
-        text = visionText;
-        extractionMethod = "vision";
-      }
-    } catch (error) {
-      visionError = error instanceof Error ? error.message : String(error);
+    const runner = input.visionOcrRunner ?? runVisionOcr;
+    const visionText = normalizeText(runner(input.pdfPath, input.ocrConfig));
+    if (visionText.length > text.length) {
+      text = visionText;
+      extractionMethod = "vision";
     }
     needsFallback = text.length < input.ocrConfig.lowTextThreshold;
   }
@@ -59,7 +54,7 @@ export async function extractPdfText(input: {
     pageCount,
     confidence,
     needsFallback,
-    reviewReason: fallbackReviewReason(input.ocrConfig, needsFallback, extractionMethod, visionError),
+    reviewReason: fallbackReviewReason(input.ocrConfig, needsFallback, extractionMethod),
     summary: modelSummaryEnabled ? summarizeWithModel(text, input.ocrConfig) : summarize(text),
     modelSummaryEnabled,
     modelProvider: input.ocrConfig.modelProvider,
@@ -102,14 +97,19 @@ export async function processOcrDocument(input: {
   return result;
 }
 
+export function defaultVisionHelperPath(): string {
+  const modulePath = fileURLToPath(import.meta.url);
+  const moduleDir = path.dirname(modulePath);
+  const parentDir = path.dirname(moduleDir);
+  const distDir = path.basename(moduleDir) === "src" && path.basename(parentDir) === "dist"
+    ? parentDir
+    : path.join(parentDir, "dist");
+  return path.join(distDir, "utils", "vision_ocr");
+}
+
 export function runVisionOcr(pdfPath: string, ocrConfig: OcrConfig): string {
-  const helperPath = ocrConfig.visionHelperPath ?? path.join(path.dirname(new URL(import.meta.url).pathname), "vision_ocr.swift");
-  const cacheDir = path.join(os.tmpdir(), "mail-bills-swift-module-cache");
-  fs.mkdirSync(cacheDir, { recursive: true });
-  const stdout = execFileSync("swift", [helperPath, pdfPath], {
-    encoding: "utf8",
-    env: { ...process.env, CLANG_MODULE_CACHE_PATH: process.env.CLANG_MODULE_CACHE_PATH ?? cacheDir }
-  });
+  const helperPath = ocrConfig.visionHelperPath ?? defaultVisionHelperPath();
+  const stdout = execFileSync(helperPath, [pdfPath], { encoding: "utf8" });
   const payload = JSON.parse(stdout) as { text?: string };
   return String(payload.text ?? "");
 }
@@ -118,9 +118,8 @@ function normalizeText(text: string): string {
   return text.replace(/\r\n/g, "\n").replace(/\r/g, "\n").split("\n").map((line) => line.trim()).filter(Boolean).join("\n").trim();
 }
 
-function fallbackReviewReason(ocrConfig: OcrConfig, needsFallback: boolean, extractionMethod: "embedded" | "vision", visionError?: string): string | undefined {
+function fallbackReviewReason(ocrConfig: OcrConfig, needsFallback: boolean, extractionMethod: "embedded" | "vision"): string | undefined {
   if (!needsFallback) return undefined;
-  if (visionError) return `Vision OCR fallback failed: ${visionError}`;
   if (extractionMethod === "vision") return "low text after Vision OCR fallback";
   if (ocrConfig.modelFallbackEnabled) return `needs OCR/model fallback: ${ocrConfig.modelProvider}/${ocrConfig.modelName}`;
   return "needs OCR/model fallback (disabled)";

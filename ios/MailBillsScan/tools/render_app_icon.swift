@@ -4,25 +4,25 @@ import Foundation
 private let canvasSize = CGSize(width: 1024, height: 1024)
 
 private let charcoal = NSColor(
-  calibratedRed: 0.12,
+  srgbRed: 0.12,
   green: 0.12,
   blue: 0.11,
   alpha: 1
 )
 private let outerCharcoal = NSColor(
-  calibratedRed: 0.08,
+  srgbRed: 0.08,
   green: 0.08,
   blue: 0.07,
   alpha: 1
 )
 private let linen = NSColor(
-  calibratedRed: 0.95,
+  srgbRed: 0.95,
   green: 0.92,
   blue: 0.87,
   alpha: 1
 )
 private let amber = NSColor(
-  calibratedRed: 0.80,
+  srgbRed: 0.80,
   green: 0.58,
   blue: 0.23,
   alpha: 1
@@ -152,7 +152,9 @@ private func drawB() {
 private func renderIcon() throws -> NSBitmapImageRep {
   let width = Int(canvasSize.width)
   let height = Int(canvasSize.height)
-  let colorSpace = CGColorSpaceCreateDeviceRGB()
+  guard let colorSpace = CGColorSpace(name: CGColorSpace.sRGB) else {
+    throw NSError(domain: "RenderError", code: 1, userInfo: [NSLocalizedDescriptionKey: "Could not create sRGB color space."])
+  }
   let bitmapInfo = CGBitmapInfo(rawValue: CGImageAlphaInfo.noneSkipLast.rawValue)
 
   guard let cgContext = CGContext(
@@ -164,7 +166,7 @@ private func renderIcon() throws -> NSBitmapImageRep {
     space: colorSpace,
     bitmapInfo: bitmapInfo.rawValue
   ) else {
-    throw NSError(domain: "RenderError", code: 1, userInfo: [NSLocalizedDescriptionKey: "Could not create bitmap context."])
+    throw NSError(domain: "RenderError", code: 2, userInfo: [NSLocalizedDescriptionKey: "Could not create bitmap context."])
   }
 
   let context = NSGraphicsContext(cgContext: cgContext, flipped: false)

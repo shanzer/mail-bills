@@ -9,68 +9,41 @@ struct PairingView: View {
     let onPair: (PairingPayload) throws -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            Text("Mail Bills Scan")
-                .font(.largeTitle.bold())
-
-            Text("Enter the Mac intake endpoint and token.")
-                .foregroundStyle(.secondary)
-
-            Button("Scan Pairing QR") {
-                showingQRScanner = true
-            }
-            .buttonStyle(.bordered)
-
-            Text("Endpoint")
-                .font(.headline)
-            TextField("http://yoyodyne:8765/api/mail-bills/intake", text: $endpoint)
-                .textInputAutocapitalization(.never)
-                .autocorrectionDisabled()
-                .keyboardType(.URL)
-                .textFieldStyle(.roundedBorder)
-
-            Text("Token")
-                .font(.headline)
-            SecureField("Bearer token", text: $token)
-                .textInputAutocapitalization(.never)
-                .autocorrectionDisabled()
-                .textFieldStyle(.roundedBorder)
-
-            DisclosureGroup("Paste pairing JSON instead") {
-                VStack(alignment: .leading, spacing: 10) {
-                    TextEditor(text: $pairingJSON)
-                        .frame(height: 120)
-                        .padding(6)
-                        .background(Color(.secondarySystemBackground))
-                        .clipShape(RoundedRectangle(cornerRadius: 8))
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
-
-                    Button("Fill Fields from JSON") {
-                        fillFromJSON()
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: AppTheme.Spacing.md) {
+                    VStack(alignment: .leading, spacing: AppTheme.Spacing.xs) {
+                        Text("{ mail bills }")
+                            .font(.appMono)
+                            .foregroundStyle(AppTheme.ColorPalette.charcoal)
+                        Text("Pair to your Mac intake receiver")
+                            .font(.appDisplay)
+                            .foregroundStyle(AppTheme.ColorPalette.charcoal)
+                        Text("Scan the pairing QR first. Manual endpoint and token entry remain available as a fallback.")
+                            .font(.appBody)
+                            .foregroundStyle(AppTheme.ColorPalette.bodyText)
                     }
-                    .buttonStyle(.bordered)
+
+                    WorkSurface {
+                        Text("Setup Console")
+                            .font(.headline)
+                        Text("Preferred path")
+                            .font(.appSectionLabel)
+                            .tracking(3)
+                            .foregroundStyle(AppTheme.ColorPalette.lightOnDark)
+                        Button("Scan Pairing QR") {
+                            showingQRScanner = true
+                        }
+                        .buttonStyle(PrimaryUtilityButtonStyle())
+                    }
+
+                    SectionLabel(text: "Manual Pairing")
+                    manualPairingSection
                 }
-                .padding(.top, 8)
+                .padding(AppTheme.Spacing.sm)
             }
-
-            if let message {
-                Text(message)
-                    .font(.callout)
-                    .foregroundStyle(.red)
-            }
-
-            Button("Pair with Mac") {
-                pairFromFields()
-            }
-            .buttonStyle(.borderedProminent)
-            .disabled(endpoint.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || token.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-
-            Spacer()
+            .background(AppTheme.ColorPalette.linen.ignoresSafeArea())
         }
-        .padding(20)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .background(Color(.systemBackground))
         .sheet(isPresented: $showingQRScanner) {
             NavigationStack {
                 PairingQRScannerView { scannedText in
@@ -78,6 +51,7 @@ struct PairingView: View {
                     pairFromScannedText(scannedText)
                 }
                 .ignoresSafeArea(edges: .bottom)
+                .background(AppTheme.ColorPalette.charcoal.ignoresSafeArea())
                 .navigationTitle("Scan Pairing QR")
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
@@ -88,6 +62,56 @@ struct PairingView: View {
                     }
                 }
             }
+            .tint(AppTheme.ColorPalette.amberDark)
+        }
+    }
+
+    private var manualPairingSection: some View {
+        VStack(alignment: .leading, spacing: AppTheme.Spacing.sm) {
+            Text("Endpoint")
+                .font(.headline)
+            TextField("http://yoyodyne:8765/api/mail-bills/intake", text: $endpoint)
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+                .keyboardType(.URL)
+                .fieldChrome(cornerRadius: AppTheme.CornerRadius.control)
+
+            Text("Token")
+                .font(.headline)
+            SecureField("Bearer token", text: $token)
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+                .fieldChrome(cornerRadius: AppTheme.CornerRadius.control)
+
+            DisclosureGroup("Paste pairing JSON instead") {
+                VStack(alignment: .leading, spacing: AppTheme.Spacing.sm) {
+                    TextEditor(text: $pairingJSON)
+                        .frame(minHeight: 120)
+                        .padding(8)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                        .fieldChrome(cornerRadius: AppTheme.CornerRadius.card)
+
+                    Button("Fill Fields from JSON") {
+                        fillFromJSON()
+                    }
+                    .buttonStyle(.bordered)
+                }
+                .padding(.top, AppTheme.Spacing.xs)
+            }
+
+            if let message {
+                FeedbackBanner(title: "Pairing issue", message: message, tone: .error)
+            }
+
+            Button("Pair with Mac") {
+                pairFromFields()
+            }
+            .buttonStyle(PrimaryUtilityButtonStyle())
+            .disabled(
+                endpoint.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ||
+                token.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            )
         }
     }
 
@@ -135,5 +159,19 @@ struct PairingView: View {
         }
         cleaned = cleaned.trimmingCharacters(in: CharacterSet(charactersIn: "\","))
         return cleaned
+    }
+}
+
+private extension View {
+    func fieldChrome(cornerRadius: CGFloat) -> some View {
+        clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+            .background(
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                    .fill(Color.white)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                    .stroke(AppTheme.ColorPalette.linenBorder, lineWidth: 1)
+            )
     }
 }

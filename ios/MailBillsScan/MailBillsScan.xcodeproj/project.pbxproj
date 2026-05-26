@@ -22,6 +22,9 @@
 		10000000000000000000010D /* ScanView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 10000000000000000000020D /* ScanView.swift */; };
 		10000000000000000000010E /* PairingQRScannerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 10000000000000000000020F /* PairingQRScannerView.swift */; };
 		10000000000000000000010F /* OutboxStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000210 /* OutboxStore.swift */; };
+		100000000000000000000110 /* AppTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000211 /* AppTheme.swift */; };
+		100000000000000000000111 /* AppComponents.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000212 /* AppComponents.swift */; };
+		100000000000000000000112 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000213 /* Assets.xcassets */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -42,6 +45,9 @@
 		10000000000000000000020E /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		10000000000000000000020F /* PairingQRScannerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PairingQRScannerView.swift; sourceTree = "<group>"; };
 		100000000000000000000210 /* OutboxStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OutboxStore.swift; sourceTree = "<group>"; };
+		100000000000000000000211 /* AppTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppTheme.swift; sourceTree = "<group>"; };
+		100000000000000000000212 /* AppComponents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppComponents.swift; sourceTree = "<group>"; };
+		100000000000000000000213 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -72,6 +78,7 @@
 				100000000000000000000405 /* Services */,
 				100000000000000000000406 /* Views */,
 				100000000000000000000407 /* Resources */,
+				100000000000000000000408 /* UI */,
 			);
 			path = MailBillsScan;
 			sourceTree = "<group>";
@@ -122,8 +129,18 @@
 			isa = PBXGroup;
 			children = (
 				10000000000000000000020E /* Info.plist */,
+				100000000000000000000213 /* Assets.xcassets */,
 			);
 			path = Resources;
+			sourceTree = "<group>";
+		};
+		100000000000000000000408 /* UI */ = {
+			isa = PBXGroup;
+			children = (
+				100000000000000000000211 /* AppTheme.swift */,
+				100000000000000000000212 /* AppComponents.swift */,
+			);
+			path = UI;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -184,6 +201,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				100000000000000000000112 /* Assets.xcassets in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -209,6 +227,8 @@
 				10000000000000000000010E /* PairingQRScannerView.swift in Sources */,
 				10000000000000000000010C /* PairingView.swift in Sources */,
 				10000000000000000000010D /* ScanView.swift in Sources */,
+				100000000000000000000110 /* AppTheme.swift in Sources */,
+				100000000000000000000111 /* AppComponents.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -332,6 +352,7 @@
 		100000000000000000000903 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
@@ -358,6 +379,7 @@
 		100000000000000000000904 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;

@@ -9,6 +9,12 @@ private let charcoal = NSColor(
   blue: 0.11,
   alpha: 1
 )
+private let outerCharcoal = NSColor(
+  calibratedRed: 0.08,
+  green: 0.08,
+  blue: 0.07,
+  alpha: 1
+)
 private let linen = NSColor(
   calibratedRed: 0.95,
   green: 0.92,
@@ -27,7 +33,16 @@ private func point(_ x: CGFloat, _ y: CGFloat) -> NSPoint {
 }
 
 private func drawBackground(in rect: NSRect) {
-  let background = NSBezierPath(roundedRect: rect, xRadius: 224, yRadius: 224)
+  outerCharcoal.setFill()
+  rect.fill()
+
+  let panelInset: CGFloat = 56
+  let panelRect = rect.insetBy(dx: panelInset, dy: panelInset)
+  let background = NSBezierPath(
+    roundedRect: panelRect,
+    xRadius: 176,
+    yRadius: 176
+  )
   charcoal.setFill()
   background.fill()
 
@@ -135,49 +150,50 @@ private func drawB() {
 }
 
 private func renderIcon() throws -> NSBitmapImageRep {
-  guard let bitmap = NSBitmapImageRep(
-    bitmapDataPlanes: nil,
-    pixelsWide: Int(canvasSize.width),
-    pixelsHigh: Int(canvasSize.height),
-    bitsPerSample: 8,
-    samplesPerPixel: 4,
-    hasAlpha: true,
-    isPlanar: false,
-    colorSpaceName: .deviceRGB,
-    bytesPerRow: 0,
-    bitsPerPixel: 0
+  let width = Int(canvasSize.width)
+  let height = Int(canvasSize.height)
+  let colorSpace = CGColorSpaceCreateDeviceRGB()
+  let bitmapInfo = CGBitmapInfo(rawValue: CGImageAlphaInfo.noneSkipLast.rawValue)
+
+  guard let cgContext = CGContext(
+    data: nil,
+    width: width,
+    height: height,
+    bitsPerComponent: 8,
+    bytesPerRow: width * 4,
+    space: colorSpace,
+    bitmapInfo: bitmapInfo.rawValue
   ) else {
     throw NSError(domain: "RenderError", code: 1, userInfo: [NSLocalizedDescriptionKey: "Could not create bitmap context."])
   }
 
-  guard let context = NSGraphicsContext(bitmapImageRep: bitmap) else {
-    throw NSError(domain: "RenderError", code: 2, userInfo: [NSLocalizedDescriptionKey: "Could not create graphics context."])
-  }
+  let context = NSGraphicsContext(cgContext: cgContext, flipped: false)
 
   NSGraphicsContext.saveGraphicsState()
   defer { NSGraphicsContext.restoreGraphicsState() }
 
   NSGraphicsContext.current = context
-  context.cgContext.interpolationQuality = .high
-  context.cgContext.setShouldAntialias(true)
+  cgContext.interpolationQuality = .high
+  cgContext.setShouldAntialias(true)
 
   let canvasRect = NSRect(origin: .zero, size: canvasSize)
-  NSColor.clear.setFill()
-  canvasRect.fill()
-
   drawBackground(in: canvasRect)
   drawBrackets(size: canvasSize)
   drawM()
   drawB()
 
-  return bitmap
+  guard let cgImage = cgContext.makeImage() else {
+    throw NSError(domain: "RenderError", code: 3, userInfo: [NSLocalizedDescriptionKey: "Could not create rendered image."])
+  }
+
+  return NSBitmapImageRep(cgImage: cgImage)
 }
 
 private func writePNG(to outputURL: URL) throws {
   let bitmap = try renderIcon()
 
   guard let pngData = bitmap.representation(using: .png, properties: [:]) else {
-    throw NSError(domain: "RenderError", code: 3, userInfo: [NSLocalizedDescriptionKey: "Could not encode PNG data."])
+    throw NSError(domain: "RenderError", code: 4, userInfo: [NSLocalizedDescriptionKey: "Could not encode PNG data."])
   }
 
   try FileManager.default.createDirectory(

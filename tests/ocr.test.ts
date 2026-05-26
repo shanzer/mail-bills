@@ -21,22 +21,31 @@ function makeOcrConfig(overrides: Partial<OcrConfig> = {}): OcrConfig {
   };
 }
 
-const expectedDefaultHelperPath = path.resolve(
-  path.dirname(fileURLToPath(import.meta.url)),
-  "..",
-  "dist",
-  "utils",
-  "vision_ocr"
-);
+const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const expectedDefaultHelperPath = path.join(repoRoot, "dist", "utils", "vision_ocr");
 
 describe("OCR helper path", () => {
   beforeEach(() => {
     vi.resetModules();
+    vi.doUnmock("node:url");
     execFileSyncMock.mockReset();
     execFileSyncMock.mockReturnValue(JSON.stringify({ text: "Vision OCR text" }));
   });
 
-  it("resolves the default Vision helper path to dist/utils/vision_ocr", async () => {
+  it("resolves the default Vision helper path to dist/utils/vision_ocr from the source-tree layout", async () => {
+    const { defaultVisionHelperPath } = await import("../src/ocr.js");
+
+    expect(defaultVisionHelperPath()).toBe(expectedDefaultHelperPath);
+  });
+
+  it("resolves the default Vision helper path to dist/utils/vision_ocr from the compiled runtime layout", async () => {
+    vi.doMock("node:url", async () => {
+      const actual = await vi.importActual<typeof import("node:url")>("node:url");
+      return {
+        ...actual,
+        fileURLToPath: vi.fn(() => path.join(repoRoot, "dist", "src", "ocr.js"))
+      };
+    });
     const { defaultVisionHelperPath } = await import("../src/ocr.js");
 
     expect(defaultVisionHelperPath()).toBe(expectedDefaultHelperPath);

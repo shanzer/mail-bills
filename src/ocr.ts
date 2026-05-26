@@ -1,7 +1,7 @@
 import { execFileSync } from "node:child_process";
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { PDFParse } from "pdf-parse";
 import type { OcrConfig } from "./types.js";
 import { Ledger } from "./ledger.js";
@@ -102,14 +102,19 @@ export async function processOcrDocument(input: {
   return result;
 }
 
+export function defaultVisionHelperPath(): string {
+  const modulePath = fileURLToPath(import.meta.url);
+  const moduleDir = path.dirname(modulePath);
+  const parentDir = path.dirname(moduleDir);
+  const distDir = path.basename(moduleDir) === "src" && path.basename(parentDir) === "dist"
+    ? parentDir
+    : path.join(parentDir, "dist");
+  return path.join(distDir, "utils", "vision_ocr");
+}
+
 export function runVisionOcr(pdfPath: string, ocrConfig: OcrConfig): string {
-  const helperPath = ocrConfig.visionHelperPath ?? path.join(path.dirname(new URL(import.meta.url).pathname), "vision_ocr.swift");
-  const cacheDir = path.join(os.tmpdir(), "mail-bills-swift-module-cache");
-  fs.mkdirSync(cacheDir, { recursive: true });
-  const stdout = execFileSync("swift", [helperPath, pdfPath], {
-    encoding: "utf8",
-    env: { ...process.env, CLANG_MODULE_CACHE_PATH: process.env.CLANG_MODULE_CACHE_PATH ?? cacheDir }
-  });
+  const helperPath = ocrConfig.visionHelperPath ?? defaultVisionHelperPath();
+  const stdout = execFileSync(helperPath, [pdfPath], { encoding: "utf8" });
   const payload = JSON.parse(stdout) as { text?: string };
   return String(payload.text ?? "");
 }

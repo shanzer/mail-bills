@@ -16,7 +16,6 @@ intake_upload:
 ocr:
   local_first: true
   vision_fallback_enabled: true
-  vision_helper_path: /Users/buckaroo/.hermes/projects/mail-bills/scripts/mail_bills/vision_ocr.swift
   model_fallback_enabled: true
   model_provider: ollama
   model_name: llama3.2:latest

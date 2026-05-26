@@ -3,6 +3,7 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { createApi } from "../src/api.js";
 import { configPaths } from "../src/config.js";
+import { scanImports } from "../src/importer.js";
 import { Ledger } from "../src/ledger.js";
 import { makeConfig, multipartBody, sidecarBytes, tempRoot } from "./helpers.js";
 
@@ -36,10 +37,15 @@ describe("REST API", () => {
     expect(html.body).toContain("Mail Bills");
     expect(html.body).toContain("/ui/app.js");
     expect(html.body).toContain("Send to Paperless");
+    expect(html.body).toContain("Import PDF");
+    expect(html.body).toContain("importPdfForm");
+    expect(html.body).toContain("importPdfFile");
     expect(js.statusCode).toBe(200);
     expect(js.body).toContain("/api/documents?limit=500");
     expect(js.body).toContain("/api/pipeline/process-pending");
     expect(js.body).toContain("send-to-paperless");
+    expect(js.body).toContain("/api/documents/import-pdf");
+    expect(js.body).toContain("FormData");
     await app.close();
   });
 
@@ -68,6 +74,106 @@ describe("REST API", () => {
     expect(accepted.statusCode).toBe(201);
     expect(accepted.json()).toMatchObject({ ok: true, documentId: "doc-1", created: true });
     expect(fs.existsSync(path.join(config.intakeUpload.intakeDir, "doc-1.pdf"))).toBe(true);
+    await app.close();
+  });
+
+  it("queues a browser PDF import as an upload-intake PDF and sidecar", async () => {
+    const config = makeConfig(tempRoot("mail-bills-api-"));
+    const app = createApi(config);
+    const multipart = multipartBrowserImport({
+      pdf: ["statement.pdf", Buffer.from("%PDF browser\n"), "application/pdf"],
+      fields: { category: "BILL", label: "Bill", note: "Imported from desktop" }
+    });
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/documents/import-pdf",
+      headers: { "content-type": multipart.contentType },
+      payload: multipart.body
+    });
+
+    expect(response.statusCode).toBe(201);
+    const body = response.json();
+    expect(body).toMatchObject({ ok: true, created: true, source: "browser_ui" });
+    expect(body.documentId).toMatch(/^ui-/);
+    expect(body.batchId).toMatch(/^browser-/);
+    expect(fs.existsSync(body.pdfPath)).toBe(true);
+    expect(fs.existsSync(body.sidecarPath)).toBe(true);
+    const sidecar = JSON.parse(fs.readFileSync(body.sidecarPath, "utf8"));
+    expect(sidecar).toMatchObject({
+      documentId: body.documentId,
+      batchId: body.batchId,
+      category: "BILL",
+      label: "Bill",
+      note: "Imported from desktop",
+      source: "browser_ui"
+    });
+    expect(sidecar.capturedAt).toEqual(expect.any(String));
+    await app.close();
+  });
+
+  it("rejects browser PDF import without a PDF", async () => {
+    const config = makeConfig(tempRoot("mail-bills-api-"));
+    const app = createApi(config);
+    const multipart = multipartBrowserImport({ fields: { category: "BILL" } });
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/documents/import-pdf",
+      headers: { "content-type": multipart.contentType },
+      payload: multipart.body
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json()).toMatchObject({ ok: false, error: "pdf is required" });
+    await app.close();
+  });
+
+  it("rejects browser PDF import with an unsupported category", async () => {
+    const config = makeConfig(tempRoot("mail-bills-api-"));
+    const app = createApi(config);
+    const multipart = multipartBrowserImport({
+      pdf: ["statement.pdf", Buffer.from("%PDF browser\n"), "application/pdf"],
+      fields: { category: "BANANA" }
+    });
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/documents/import-pdf",
+      headers: { "content-type": multipart.contentType },
+      payload: multipart.body
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json().error).toContain("category");
+    await app.close();
+  });
+
+  it("imports a browser PDF upload through the normal upload-intake scanner", async () => {
+    const config = makeConfig(tempRoot("mail-bills-api-"));
+    const app = createApi(config);
+    const multipart = multipartBrowserImport({
+      pdf: ["statement.pdf", Buffer.from("%PDF browser\n"), "application/pdf"],
+      fields: { category: "RECEIPT-RECORD", label: "Receipt Record" }
+    });
+    const upload = await app.inject({
+      method: "POST",
+      url: "/api/documents/import-pdf",
+      headers: { "content-type": multipart.contentType },
+      payload: multipart.body
+    });
+    const documentId = upload.json().documentId;
+
+    const summary = scanImports({ config, dryRun: false, stableDelayMs: 0 });
+    const ledger = new Ledger(configPaths(config).ledgerPath);
+
+    expect(summary).toMatchObject({ imported: 1, failed: 0, skipped: 0, dryRun: false });
+    expect(ledger.getDocument(documentId)).toMatchObject({
+      document_id: documentId,
+      status: "imported",
+      category: "RECEIPT-RECORD",
+      shortcut_label: "Receipt Record"
+    });
     await app.close();
   });
 
@@ -198,3 +304,27 @@ describe("REST API", () => {
     await app.close();
   });
 });
+
+function multipartBrowserImport(input: {
+  pdf?: [string, Buffer, string];
+  fields?: Record<string, string>;
+}): { body: Buffer; contentType: string } {
+  const boundary = "mail-bills-browser-import-boundary";
+  const chunks: Buffer[] = [];
+  for (const [name, value] of Object.entries(input.fields ?? {})) {
+    chunks.push(Buffer.from(`--${boundary}\r\n`));
+    chunks.push(Buffer.from(`Content-Disposition: form-data; name="${name}"\r\n\r\n`));
+    chunks.push(Buffer.from(value));
+    chunks.push(Buffer.from("\r\n"));
+  }
+  if (input.pdf) {
+    const [filename, payload, contentType] = input.pdf;
+    chunks.push(Buffer.from(`--${boundary}\r\n`));
+    chunks.push(Buffer.from(`Content-Disposition: form-data; name="pdf"; filename="${filename}"\r\n`));
+    chunks.push(Buffer.from(`Content-Type: ${contentType}\r\n\r\n`));
+    chunks.push(payload);
+    chunks.push(Buffer.from("\r\n"));
+  }
+  chunks.push(Buffer.from(`--${boundary}--\r\n`));
+  return { body: Buffer.concat(chunks), contentType: `multipart/form-data; boundary=${boundary}` };
+}

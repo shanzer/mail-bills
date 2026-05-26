@@ -49,6 +49,10 @@ npm run start -- --log-level debug
   - The handler only writes a durable PDF/JSON pair. It does not import, OCR, or classify.
 - `GET /api/documents` - list ledger documents.
   - Query: `status`, `q`, `limit`, `offset`.
+- `POST /api/documents/import-pdf` - browser UI PDF import.
+  - Multipart fields: `pdf` required; `category`, `label`, and `note` optional.
+  - The handler generates the same sidecar shape as phone intake and queues a PDF/JSON pair in upload intake.
+  - It does not OCR, classify, or write the ledger directly; run the pipeline or wait for the scheduler.
 - `GET /api/documents/:documentId` - fetch one ledger document.
 - `GET /api/documents/:documentId/pdf` - stream the ledger-linked PDF, only if it is under the configured root.
 - `POST /api/documents/:documentId/actions` - apply review/UI actions.

@@ -1,8 +1,9 @@
+import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import Fastify, { type FastifyInstance } from "fastify";
 import multipart from "@fastify/multipart";
-import type { MailBillsConfig } from "./types.js";
+import { CATEGORY_VALUES, type MailBillsConfig } from "./types.js";
 import { configPaths } from "./config.js";
 import { Ledger } from "./ledger.js";
 import { acceptUpload, authorizeUpload, IntakeUploadError } from "./intake.js";
@@ -48,6 +49,45 @@ export function createApi(config: MailBillsConfig): FastifyInstance {
       }
       const result = acceptUpload({ pdfBytes: pdfBytes ?? Buffer.alloc(0), sidecarBytes: sidecarBytes ?? Buffer.alloc(0), config });
       return reply.code(result.created ? 201 : 200).send({ ok: true, created: result.created, documentId: result.documentId, pdfPath: result.pdfPath, sidecarPath: result.sidecarPath });
+    } catch (error) {
+      if (error instanceof IntakeUploadError) return reply.code(error.statusCode).send({ ok: false, error: error.message });
+      throw error;
+    }
+  });
+
+  app.post("/api/documents/import-pdf", async (request, reply) => {
+    try {
+      const parts = request.parts();
+      let pdfBytes: Buffer | undefined;
+      let pdfFilename: string | undefined;
+      let pdfMimetype: string | undefined;
+      const fields: Record<string, unknown> = {};
+      for await (const part of parts) {
+        if (part.type === "file") {
+          if (part.fieldname !== "pdf") continue;
+          pdfFilename = part.filename;
+          pdfMimetype = part.mimetype;
+          pdfBytes = await part.toBuffer();
+        } else {
+          fields[part.fieldname] = part.value;
+        }
+      }
+      if (!pdfBytes?.length) throw new IntakeUploadError("pdf is required");
+      if (!isPdfUpload(pdfFilename, pdfMimetype)) throw new IntakeUploadError("pdf must be an application/pdf file");
+      const category = validateBrowserImportCategory(fields.category);
+      const label = trimText(fields.label, 100) ?? category;
+      const note = trimText(fields.note, 500);
+      const { sidecar, sidecarBytes } = browserImportSidecar({ category, label, note });
+      const result = acceptUpload({ pdfBytes, sidecarBytes, config });
+      return reply.code(result.created ? 201 : 200).send({
+        ok: true,
+        created: result.created,
+        source: "browser_ui",
+        batchId: sidecar.batchId,
+        documentId: result.documentId,
+        pdfPath: result.pdfPath,
+        sidecarPath: result.sidecarPath
+      });
     } catch (error) {
       if (error instanceof IntakeUploadError) return reply.code(error.statusCode).send({ ok: false, error: error.message });
       throw error;
@@ -218,4 +258,49 @@ function parseBoolean(value: unknown): boolean {
   if (typeof value === "boolean") return value;
   if (value === undefined || value === null) return false;
   return ["1", "true", "yes", "on"].includes(String(value).toLowerCase());
+}
+
+function validateBrowserImportCategory(value: unknown): string {
+  const category = trimText(value) ?? "UNKNOWN";
+  if (!CATEGORY_VALUES.includes(category as any)) {
+    throw new IntakeUploadError(`category must be one of ${CATEGORY_VALUES.join(", ")}`);
+  }
+  return category;
+}
+
+function browserImportSidecar(input: { category: string; label?: string; note?: string }): { sidecar: Record<string, unknown>; sidecarBytes: Buffer } {
+  const now = new Date();
+  const sidecar: Record<string, unknown> = {
+    batchId: browserBatchId(now),
+    documentId: browserDocumentId(now),
+    capturedAt: now.toISOString(),
+    label: input.label ?? input.category,
+    category: input.category,
+    source: "browser_ui"
+  };
+  if (input.note) sidecar.note = input.note;
+  return { sidecar, sidecarBytes: Buffer.from(JSON.stringify(sidecar)) };
+}
+
+function browserBatchId(date: Date): string {
+  return `browser-${compactTimestamp(date).slice(0, 15)}`;
+}
+
+function browserDocumentId(date: Date): string {
+  return `ui-${compactTimestamp(date)}-${crypto.randomBytes(4).toString("hex")}`;
+}
+
+function compactTimestamp(date: Date): string {
+  return date.toISOString().replace(/\D/g, "").slice(0, 14);
+}
+
+function trimText(value: unknown, maxLength?: number): string | undefined {
+  if (value === undefined || value === null) return undefined;
+  const text = String(value).trim();
+  if (!text) return undefined;
+  return maxLength === undefined ? text : text.slice(0, maxLength);
+}
+
+function isPdfUpload(filename?: string, mimetype?: string): boolean {
+  return Boolean(filename?.toLowerCase().endsWith(".pdf") && mimetype === "application/pdf");
 }

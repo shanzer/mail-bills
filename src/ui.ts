@@ -55,6 +55,7 @@ export const uiHtml = `<!doctype html>
                 <input id="documentSearch" type="search" placeholder="Search vendor, batch, id" />
               </label>
               <select class="category-filter" id="documentCategoryFilter" aria-label="Filter all documents by category"></select>
+              <button class="button button-secondary" type="button" data-import-pdf-open><span data-icon="upload-cloud"></span>Import PDF</button>
               <button class="button button-primary" type="button" data-run-pipeline="live"><span data-icon="play"></span>Run Pipeline</button>
               <button class="icon-button" type="button" id="refreshDocuments" aria-label="Refresh list"><span data-icon="refresh-cw"></span></button>
             </div>
@@ -207,6 +208,29 @@ export const uiHtml = `<!doctype html>
             <p class="muted" id="pairingWarnings"></p>
           </div>
         </div>
+      </section>
+    </div>
+    <div class="modal-backdrop" id="importPdfModal" hidden>
+      <section class="modal compact-modal" role="dialog" aria-modal="true" aria-labelledby="importPdfTitle">
+        <form id="importPdfForm">
+          <div class="modal-header">
+            <div>
+              <p class="section-label">Browser Import</p>
+              <h2 id="importPdfTitle">Import PDF</h2>
+            </div>
+            <button class="icon-button" type="button" data-import-pdf-close aria-label="Close PDF import"><span data-icon="x"></span></button>
+          </div>
+          <div class="modal-body">
+            <label>PDF<input id="importPdfFile" name="pdf" type="file" accept="application/pdf,.pdf" required /></label>
+            <label>Category<select id="importPdfCategory" name="category"></select></label>
+            <label>Label<input id="importPdfLabel" name="label" type="text" placeholder="Optional friendly label" /></label>
+            <label>Note<textarea id="importPdfNote" name="note" maxlength="500" rows="3" placeholder="Optional note"></textarea></label>
+          </div>
+          <div class="modal-actions">
+            <button class="button button-secondary" type="button" data-import-pdf-close>Cancel</button>
+            <button class="button button-primary" type="submit"><span data-icon="upload-cloud"></span>Queue Import</button>
+          </div>
+        </form>
       </section>
     </div>
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
@@ -810,6 +834,38 @@ pre {
   padding: 18px;
   border-bottom: 1px solid var(--linen-border);
 }
+.compact-modal { width: min(560px, 100%); }
+.modal-body {
+  display: grid;
+  gap: 14px;
+  padding: 18px;
+}
+.modal-body label {
+  display: grid;
+  gap: 6px;
+  color: var(--mid-gray);
+  font-size: 13px;
+  font-weight: 650;
+}
+.modal-body input,
+.modal-body select,
+.modal-body textarea {
+  width: 100%;
+  min-height: 38px;
+  border: 1px solid var(--linen-border);
+  border-radius: 4px;
+  background: #fbfaf6;
+  color: var(--charcoal);
+  padding: 8px;
+  font: inherit;
+}
+.modal-body textarea { resize: vertical; }
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 0 18px 18px;
+}
 .qr-layout {
   display: grid;
   grid-template-columns: 340px minmax(0, 1fr);
@@ -901,6 +957,12 @@ const els = {
   pairingQr: document.getElementById("pairingQr"),
   pairingDetails: document.getElementById("pairingDetails"),
   pairingWarnings: document.getElementById("pairingWarnings"),
+  importPdfModal: document.getElementById("importPdfModal"),
+  importPdfForm: document.getElementById("importPdfForm"),
+  importPdfFile: document.getElementById("importPdfFile"),
+  importPdfCategory: document.getElementById("importPdfCategory"),
+  importPdfLabel: document.getElementById("importPdfLabel"),
+  importPdfNote: document.getElementById("importPdfNote"),
   toast: document.getElementById("toast")
 };
 
@@ -929,6 +991,8 @@ document.querySelectorAll("[data-icon]").forEach((node) => {
 });
 els.categorySelect.innerHTML = categories.map((category) => "<option value='" + category + "'>" + category + "</option>").join("");
 els.categoryFilter.innerHTML = "<option value='All'>All Categories</option>" + categories.map((category) => "<option value='" + category + "'>" + category + "</option>").join("");
+els.importPdfCategory.innerHTML = categories.map((category) => "<option value='" + category + "'>" + category + "</option>").join("");
+els.importPdfCategory.value = "UNKNOWN";
 
 function text(value, fallback = "-") {
   if (value === undefined || value === null || value === "") return fallback;
@@ -969,9 +1033,12 @@ function visibleDocuments() {
 }
 
 async function api(path, options = {}) {
+  const headers = options.body instanceof FormData
+    ? { ...(options.headers || {}) }
+    : { "content-type": "application/json", ...(options.headers || {}) };
   const response = await fetch(path, {
     ...options,
-    headers: { "content-type": "application/json", ...(options.headers || {}) }
+    headers
   });
   const body = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(body.error || ("HTTP " + response.status));
@@ -1162,6 +1229,34 @@ async function showPairingQr(rotate = false) {
   els.pairingModal.hidden = false;
 }
 
+function showImportPdfModal() {
+  els.importPdfForm.reset();
+  els.importPdfCategory.value = "UNKNOWN";
+  els.importPdfModal.hidden = false;
+}
+
+function closeImportPdfModal() {
+  els.importPdfModal.hidden = true;
+}
+
+async function submitImportPdf() {
+  const file = els.importPdfFile.files && els.importPdfFile.files[0];
+  if (!file) throw new Error("Choose a PDF to import.");
+  const form = new FormData();
+  form.append("pdf", file);
+  form.append("category", els.importPdfCategory.value || "UNKNOWN");
+  if (els.importPdfLabel.value.trim()) form.append("label", els.importPdfLabel.value.trim());
+  if (els.importPdfNote.value.trim()) form.append("note", els.importPdfNote.value.trim());
+  const body = await api("/api/documents/import-pdf", {
+    method: "POST",
+    body: form,
+    headers: {}
+  });
+  closeImportPdfModal();
+  toast("Queued PDF import: " + body.documentId);
+  await Promise.all([loadDocuments(), loadStatus()]);
+}
+
 async function runPipeline(mode) {
   const dryRun = mode !== "live";
   const body = await api("/api/pipeline/process-pending", {
@@ -1218,9 +1313,24 @@ document.addEventListener("click", async (event) => {
     try { await showPairingQr(true); } catch (error) { toast(error.message); } finally { target.disabled = false; }
     return;
   }
+  if (target.hasAttribute("data-import-pdf-open")) {
+    showImportPdfModal();
+    return;
+  }
+  if (target.hasAttribute("data-import-pdf-close")) {
+    closeImportPdfModal();
+    return;
+  }
   if (target.hasAttribute("data-close-pairing")) {
     els.pairingModal.hidden = true;
   }
+});
+
+els.importPdfForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const submit = els.importPdfForm.querySelector("button[type='submit']");
+  submit.disabled = true;
+  try { await submitImportPdf(); } catch (error) { toast(error.message); } finally { submit.disabled = false; }
 });
 
 els.search.addEventListener("input", () => {

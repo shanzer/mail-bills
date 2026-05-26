@@ -23,48 +23,18 @@ struct ScanView: View {
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(alignment: .leading, spacing: AppTheme.Spacing.md) {
-                    WorkSurface {
-                        HStack(alignment: .top, spacing: AppTheme.Spacing.sm) {
-                            VStack(alignment: .leading, spacing: 6) {
-                                Text("Paired Mac")
-                                    .font(.appSectionLabel)
-                                    .tracking(3)
-                                    .foregroundStyle(AppTheme.ColorPalette.lightOnDark)
-                                Text(pairing.endpoint.host ?? pairing.endpoint.absoluteString)
-                                    .font(.headline)
-                            }
-                            Spacer()
-                            Text(outboxCount == 0 ? "No pending uploads" : "\(outboxCount) pending")
-                                .font(.appMono)
-                                .foregroundStyle(AppTheme.ColorPalette.lightOnDark)
-                        }
-
-                        Text(statusText)
-                            .font(.appDisplay)
-                            .foregroundStyle(AppTheme.ColorPalette.linen)
-
-                        Button(isUploading ? "Uploading..." : "Scan Mail Item") {
-                            isShowingScanner = true
-                        }
-                        .buttonStyle(PrimaryUtilityButtonStyle())
-                        .disabled(isUploading || isRetryingOutbox || !VNDocumentCameraViewController.isSupported)
-
-                        MetricStrip(items: [
-                            .init(label: "Batch", value: batchId),
-                            .init(label: "Scanned", value: "\(itemCount)"),
-                            .init(label: "Label", value: selectedCategory.label),
-                        ])
-                    }
-
+                VStack(alignment: .leading, spacing: AppTheme.Spacing.sm) {
+                    scanHero
                     nextItemDetailsSection
                     feedbackSection
                     secondaryActionsSection
                 }
-                .padding(AppTheme.Spacing.sm)
+                .padding(.horizontal, AppTheme.Spacing.sm)
+                .padding(.top, AppTheme.Spacing.xs)
+                .padding(.bottom, AppTheme.Spacing.sm)
             }
             .background(AppTheme.ColorPalette.linen.ignoresSafeArea())
-            .navigationTitle("Mail Bills Scan")
+            .navigationBarTitleDisplayMode(.inline)
             .sheet(isPresented: $isShowingScanner) {
                 DocumentScannerView(
                     onCancel: {
@@ -84,6 +54,56 @@ struct ScanView: View {
             .task {
                 refreshOutboxCount()
             }
+        }
+    }
+
+    private var scanHero: some View {
+        WorkSurface(spacing: 12, padding: 14, cornerRadius: AppTheme.CornerRadius.panel) {
+            HStack(alignment: .top, spacing: AppTheme.Spacing.sm) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Paired Mac")
+                        .font(.appSectionLabel)
+                        .tracking(3)
+                        .foregroundStyle(AppTheme.ColorPalette.lightOnDark)
+                    Text(pairing.endpoint.host ?? pairing.endpoint.absoluteString)
+                        .font(.headline)
+                }
+                Spacer()
+                VStack(alignment: .trailing, spacing: 4) {
+                    Text("State")
+                        .font(.appSectionLabel)
+                        .tracking(3)
+                        .foregroundStyle(AppTheme.ColorPalette.lightOnDark)
+                    Text(scanHeroStatus.headline)
+                        .font(.headline)
+                        .multilineTextAlignment(.trailing)
+                }
+            }
+
+            Text(scanHeroStatus.title)
+                .font(.appDisplay)
+                .foregroundStyle(AppTheme.ColorPalette.linen)
+                .lineLimit(2)
+                .minimumScaleFactor(0.92)
+
+            Text(outboxCount == 0 ? "Pending uploads: none" : "Pending uploads: \(outboxCount)")
+                .font(.appBody)
+                .foregroundStyle(AppTheme.ColorPalette.lightOnDark)
+
+            Button(isUploading ? "Uploading..." : "Scan Mail Item") {
+                isShowingScanner = true
+            }
+            .buttonStyle(PrimaryUtilityButtonStyle())
+            .disabled(isUploading || isRetryingOutbox || !VNDocumentCameraViewController.isSupported)
+
+            MetricStrip(
+                items: [
+                    .init(label: "Batch", value: batchId),
+                    .init(label: "Scanned", value: "\(itemCount)"),
+                    .init(label: "Label", value: selectedCategory.label),
+                ],
+                spacing: 10
+            )
         }
     }
 
@@ -144,6 +164,72 @@ struct ScanView: View {
                 onResetPairing()
             }
             .buttonStyle(.bordered)
+        }
+    }
+
+    private var scanHeroStatus: ScanHeroStatus {
+        ScanHeroStatus(
+            isUploading: isUploading,
+            isRetryingOutbox: isRetryingOutbox,
+            statusText: statusText,
+            lastError: lastError
+        )
+    }
+
+    private struct ScanHeroStatus {
+        let headline: String
+        let title: String
+
+        init(isUploading: Bool, isRetryingOutbox: Bool, statusText: String, lastError: String?) {
+            if isUploading {
+                headline = "Uploading"
+                title = "Uploading current scan"
+                return
+            }
+
+            if isRetryingOutbox {
+                headline = "Retrying"
+                title = "Retrying pending uploads"
+                return
+            }
+
+            if statusText == "Ready" && lastError == nil {
+                headline = "Ready"
+                title = "Scan the next item"
+                return
+            }
+
+            if statusText == "Saved pending upload" {
+                headline = "Pending"
+                title = statusText
+                return
+            }
+
+            if statusText == "Retry stopped" || statusText == "Outbox unavailable" {
+                headline = "Attention"
+                title = statusText
+                return
+            }
+
+            if statusText == "Upload failed" || statusText == "Scan failed" {
+                headline = "Attention"
+                title = statusText
+                return
+            }
+
+            if statusText.hasPrefix("Uploaded ") {
+                if statusText.contains("pending item") {
+                    headline = "Retried"
+                    title = statusText
+                } else {
+                    headline = "Uploaded"
+                    title = "Scan the next item"
+                }
+                return
+            }
+
+            headline = lastError == nil ? "Ready" : "Attention"
+            title = statusText
         }
     }
 

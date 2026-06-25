@@ -77,6 +77,18 @@ describe("OCR helper path", () => {
       encoding: "utf8"
     }));
   });
+
+  it("explains EACCES failures from non-executable Vision helper paths", async () => {
+    const { runVisionOcr } = await import("../src/ocr.js");
+    const helperPath = path.join(repoRoot, "utils", "vision_ocr.swift");
+    const pdfPath = "/tmp/mail-bills-source-helper.pdf";
+    execFileSyncMock.mockImplementationOnce(() => {
+      throw Object.assign(new Error("spawn EACCES"), { code: "EACCES" });
+    });
+
+    expect(() => runVisionOcr(pdfPath, makeOcrConfig({ visionHelperPath: helperPath })))
+      .toThrow(`Vision OCR helper is not executable: ${helperPath}`);
+  });
 });
 
 describe("extractPdfText", () => {

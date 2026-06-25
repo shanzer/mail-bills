@@ -1111,7 +1111,7 @@ function renderReview() {
       "<span class='muted'>" + escapeHtml(doc.review_reason || "Review required") + "</span><span class='mono muted'>" + escapeHtml(doc.batch_id) + "</span></span></button>";
   }).join("") || "<div class='empty-state is-visible'>No documents need review.</div>";
 
-  const doc = selectedDocument();
+  const doc = reviewDocs.find((item) => item.document_id === state.selectedId) || null;
   document.querySelectorAll("[data-doc-action]").forEach((button) => {
     const action = button.getAttribute("data-doc-action");
     const status = text(doc?.status, "");
@@ -1214,6 +1214,11 @@ async function applyAction(action) {
     body: JSON.stringify(body)
   });
   toast(action === "send-to-paperless" ? "Sent to Paperless: " + doc.document_id : result.action + " applied to " + doc.document_id);
+  if (action === "delete") {
+    state.selectedId = null;
+    state.status = "All";
+    showView("console");
+  }
   await loadDocuments();
 }
 

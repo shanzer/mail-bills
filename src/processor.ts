@@ -89,11 +89,14 @@ export async function processBatch(input: {
       } else {
         ledger.upsertDocument({ document_id: documentId, status: "Error", error_message: message });
         ledger.appendEvent({ documentId, batchId: document.batch_id, eventType: "processing_error", payload: { message } });
+        plannedDocuments.set(documentId, ledger.getDocument(documentId) ?? { ...document, status: "Error", error_message: message });
       }
     }
   }
 
-  const documents = dryRun ? documentsForSummary(ledger, input.batchId, plannedDocuments) : ledger.documentsForBatch(input.batchId);
+  const documents = dryRun
+    ? documentsForSummary(ledger, input.batchId, plannedDocuments)
+    : [...plannedDocuments.values()].sort((left, right) => left.document_id.localeCompare(right.document_id));
   if (!dryRun) ledger.upsertBatch({ batch_id: input.batchId, status: errors.length ? "processed_with_errors" : "processed" });
   return { batchId: input.batchId, processed, failed: errors.length, dryRun, documents, errors };
 }

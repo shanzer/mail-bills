@@ -109,7 +109,15 @@ export function defaultVisionHelperPath(): string {
 
 export function runVisionOcr(pdfPath: string, ocrConfig: OcrConfig): string {
   const helperPath = ocrConfig.visionHelperPath ?? defaultVisionHelperPath();
-  const stdout = execFileSync(helperPath, [pdfPath], { encoding: "utf8" });
+  let stdout: string;
+  try {
+    stdout = execFileSync(helperPath, [pdfPath], { encoding: "utf8" });
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "EACCES") {
+      throw new Error(`Vision OCR helper is not executable: ${helperPath}. Compile utils/vision_ocr.swift to dist/utils/vision_ocr or remove ocr.vision_helper_path to use the default helper path.`);
+    }
+    throw error;
+  }
   const payload = JSON.parse(stdout) as { text?: string };
   return String(payload.text ?? "");
 }

@@ -1,7 +1,11 @@
 root_dir: /Users/buckaroo/.hermes/projects/mail-bills
 icloud_intake_dir:
 icloud_error_dir:
-notion_database_name: Mail & Bills
+# Optional shared bearer token guarding all management/pipeline/pairing
+# endpoints. If unset, those endpoints are reachable only from loopback
+# (127.0.0.1); set this to allow access from the LAN / other machines.
+api:
+  admin_token:
 pipeline_schedule:
   enabled: true
   interval_minutes: 180

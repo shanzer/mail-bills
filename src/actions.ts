@@ -4,7 +4,6 @@ import { CATEGORY_VALUES } from "./types.js";
 import { Ledger } from "./ledger.js";
 import { REVIEW_DECISIONS, resolveReview } from "./review.js";
 import { quarantineDocument } from "./quarantine.js";
-import { NotionAdapter } from "./notion.js";
 import { uploadPdfToPaperless, type PaperlessUploader } from "./paperless.js";
 import { textValue } from "./paths.js";
 
@@ -27,7 +26,6 @@ export async function applyDocumentAction(input: {
   ledger: Ledger;
   config: MailBillsConfig;
   dryRun?: boolean;
-  notionAdapter?: NotionAdapter;
   today?: Date;
   dueDate?: string | null;
   clearDueDate?: boolean;
@@ -166,7 +164,7 @@ function editableFieldsUpdate(document: DocumentRecord, input: Parameters<typeof
 async function deleteDocument(input: Parameters<typeof applyDocumentAction>[0], dryRun: boolean): Promise<DocumentActionResult> {
   const document = input.ledger.getDocument(input.documentId);
   const choice = input.deleteChoice ?? (textValue(document?.duplicate_of_document_id) || textValue(document?.status) === "Duplicate" ? "Delete duplicate" : "Ignore/delete");
-  const result = await quarantineDocument({ documentId: input.documentId, ledger: input.ledger, config: input.config, notionAdapter: input.notionAdapter, choice, today: input.today, dryRun });
+  const result = await quarantineDocument({ documentId: input.documentId, ledger: input.ledger, config: input.config, choice, today: input.today, dryRun });
   return { documentId: input.documentId, action: "delete", ok: true, dryRun, payload: { choice, planned_update: result.plannedUpdate, quarantined: result.quarantined, permanently_deleted: result.permanentlyDeleted, moved_files: result.movedFiles, events: result.events } };
 }
 

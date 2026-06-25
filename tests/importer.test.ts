@@ -26,19 +26,19 @@ describe("importer", () => {
     expect(fs.existsSync(document!.local_pdf_path!)).toBe(true);
   });
 
-  it("scans configured upload intake", () => {
+  it("scans configured upload intake", async () => {
     const root = tempRoot("mail-bills-import-");
     const config = makeConfig(root);
     fs.mkdirSync(config.intakeUpload.intakeDir, { recursive: true });
     fs.writeFileSync(path.join(config.intakeUpload.intakeDir, "doc-1.pdf"), "%PDF import\n");
     fs.writeFileSync(path.join(config.intakeUpload.intakeDir, "doc-1.json"), sidecarBytes());
 
-    const summary = scanImports({ config, dryRun: false, stableDelayMs: 0 });
+    const summary = await scanImports({ config, dryRun: false, stableDelayMs: 0 });
 
     expect(summary).toMatchObject({ imported: 1, failed: 0, skipped: 0, dryRun: false });
   });
 
-  it("scans upload intake when iCloud intake is disabled", () => {
+  it("scans upload intake when iCloud intake is disabled", async () => {
     const root = tempRoot("mail-bills-import-");
     const config = makeConfig(root);
     config.icloudIntakeDir = undefined;
@@ -47,7 +47,7 @@ describe("importer", () => {
     fs.writeFileSync(path.join(config.intakeUpload.intakeDir, "doc-1.pdf"), "%PDF import\n");
     fs.writeFileSync(path.join(config.intakeUpload.intakeDir, "doc-1.json"), sidecarBytes());
 
-    const summary = scanImports({ config, dryRun: false, stableDelayMs: 0 });
+    const summary = await scanImports({ config, dryRun: false, stableDelayMs: 0 });
 
     expect(summary).toMatchObject({ imported: 1, failed: 0, skipped: 0, dryRun: false });
   });

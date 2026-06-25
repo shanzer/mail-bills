@@ -1,11 +1,70 @@
 import fs from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { createApi } from "../src/api.js";
+import { authorizeAdmin, createApi } from "../src/api.js";
 import { configPaths } from "../src/config.js";
 import { scanImports } from "../src/importer.js";
 import { Ledger } from "../src/ledger.js";
 import { makeConfig, multipartBody, sidecarBytes, tempRoot } from "./helpers.js";
+
+describe("admin authorization", () => {
+  it("allows loopback callers when no admin token is configured", () => {
+    expect(authorizeAdmin({ ip: "127.0.0.1", adminToken: undefined }).ok).toBe(true);
+    expect(authorizeAdmin({ ip: "::1", adminToken: undefined }).ok).toBe(true);
+  });
+
+  it("rejects non-loopback callers when no admin token is configured", () => {
+    const decision = authorizeAdmin({ ip: "192.168.1.5", adminToken: undefined });
+    expect(decision.ok).toBe(false);
+    if (!decision.ok) expect(decision.statusCode).toBe(401);
+  });
+
+  it("requires a constant-time matching bearer token when configured", () => {
+    const token = "admin-secret";
+    expect(authorizeAdmin({ header: `Bearer ${token}`, ip: "10.0.0.1", adminToken: token }).ok).toBe(true);
+    expect(authorizeAdmin({ header: "Bearer wrong", ip: "10.0.0.1", adminToken: token }).ok).toBe(false);
+    expect(authorizeAdmin({ header: undefined, ip: "10.0.0.1", adminToken: token }).ok).toBe(false);
+    expect(authorizeAdmin({ header: "Beareradmin-secret", ip: "10.0.0.1", adminToken: token }).ok).toBe(false);
+  });
+
+  it("guards management endpoints when an admin token is configured", async () => {
+    const config = makeConfig(tempRoot("mail-bills-api-auth-"));
+    config.api = { adminToken: "admin-secret" };
+    const app = createApi(config);
+
+    const noToken = await app.inject({ method: "GET", url: "/api/status" });
+    expect(noToken.statusCode).toBe(401);
+
+    const wrongToken = await app.inject({ method: "GET", url: "/api/status", headers: { authorization: "Bearer wrong" } });
+    expect(wrongToken.statusCode).toBe(401);
+
+    const ok = await app.inject({ method: "GET", url: "/api/status", headers: { authorization: "Bearer admin-secret" } });
+    expect(ok.statusCode).toBe(200);
+    await app.close();
+  });
+
+  it("still serves health and the intake endpoint without the admin token", async () => {
+    const config = makeConfig(tempRoot("mail-bills-api-auth-"));
+    config.api = { adminToken: "admin-secret" };
+    const app = createApi(config);
+
+    const health = await app.inject({ method: "GET", url: "/health" });
+    expect(health.statusCode).toBe(200);
+
+    const multipart = multipartBody({
+      pdf: ["doc-1.pdf", Buffer.from("%PDF upload\n"), "application/pdf"],
+      sidecar: ["doc-1.json", sidecarBytes(), "application/json"]
+    });
+    const intake = await app.inject({
+      method: "POST",
+      url: "/api/mail-bills/intake",
+      headers: { authorization: "Bearer secret-token", "content-type": multipart.contentType },
+      payload: multipart.body
+    });
+    expect(intake.statusCode).toBe(201);
+    await app.close();
+  });
+});
 
 describe("REST API", () => {
   it("exposes health", async () => {
@@ -164,7 +223,7 @@ describe("REST API", () => {
     });
     const documentId = upload.json().documentId;
 
-    const summary = scanImports({ config, dryRun: false, stableDelayMs: 0 });
+    const summary = await scanImports({ config, dryRun: false, stableDelayMs: 0 });
     const ledger = new Ledger(configPaths(config).ledgerPath);
 
     expect(summary).toMatchObject({ imported: 1, failed: 0, skipped: 0, dryRun: false });

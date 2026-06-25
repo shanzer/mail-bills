@@ -42,7 +42,10 @@ export interface MailBillsConfig {
   rootDir: string;
   icloudIntakeDir?: string;
   icloudErrorDir?: string;
-  notionDatabaseName: string;
+  api?: {
+    /** Shared bearer token guarding all management/pipeline/pairing endpoints. */
+    adminToken?: string;
+  };
   logging: {
     level: "silent" | "fatal" | "error" | "warn" | "info" | "debug" | "trace";
   };
@@ -91,7 +94,6 @@ export interface DocumentRecord {
   confidence?: string | null;
   review_reason?: string | null;
   urgency_reasons_json?: string | null;
-  notion_page_id?: string | null;
   retention_decision?: string | null;
   quarantined_until?: string | null;
   duplicate_of_document_id?: string | null;

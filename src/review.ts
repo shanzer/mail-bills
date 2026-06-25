@@ -1,6 +1,5 @@
 import type { DocumentRecord, MailBillsConfig } from "./types.js";
 import { Ledger } from "./ledger.js";
-import { NotionAdapter } from "./notion.js";
 import { textValue } from "./paths.js";
 
 export const REVIEW_DECISIONS = new Set(["archive"]);
@@ -10,7 +9,6 @@ export interface ReviewResolutionResult {
   decision: string;
   dryRun: boolean;
   plannedUpdate: DocumentRecord;
-  notionSynced: boolean;
 }
 
 export function needsReviewDocuments(ledger: Ledger): DocumentRecord[] {
@@ -23,8 +21,6 @@ export async function resolveReview(input: {
   ledger: Ledger;
   config: MailBillsConfig;
   dryRun?: boolean;
-  syncNotion?: boolean;
-  notionAdapter?: NotionAdapter;
   dueDate?: string | null;
   clearDueDate?: boolean;
 }): Promise<ReviewResolutionResult> {
@@ -32,17 +28,10 @@ export async function resolveReview(input: {
   const document = input.ledger.getDocument(input.documentId);
   if (!document) throw new Error(`Unknown document_id: ${input.documentId}`);
   const update = decisionUpdate(document, input.decision, input.dueDate, Boolean(input.clearDueDate));
-  if (input.dryRun) return { documentId: input.documentId, decision: input.decision, dryRun: true, plannedUpdate: update, notionSynced: false };
+  if (input.dryRun) return { documentId: input.documentId, decision: input.decision, dryRun: true, plannedUpdate: update };
   input.ledger.upsertDocument(update);
   input.ledger.appendEvent({ documentId: input.documentId, batchId: document.batch_id, eventType: "review_resolved", payload: { decision: input.decision, update } });
-  let notionSynced = false;
-  if (input.syncNotion) {
-    const adapter = input.notionAdapter ?? new NotionAdapter(input.config);
-    const result = await adapter.upsertDocument(input.ledger.getDocument(input.documentId) ?? { ...document, ...update }, { dryRun: false });
-    if (!result.ok) throw new Error(result.message || "Notion review sync failed");
-    notionSynced = true;
-  }
-  return { documentId: input.documentId, decision: input.decision, dryRun: false, plannedUpdate: update, notionSynced };
+  return { documentId: input.documentId, decision: input.decision, dryRun: false, plannedUpdate: update };
 }
 
 function decisionUpdate(document: DocumentRecord, decision: string, dueDate?: string | null, clearDueDate = false): DocumentRecord {

@@ -6,7 +6,7 @@ import multipart from "@fastify/multipart";
 import { CATEGORY_VALUES, type MailBillsConfig } from "./types.js";
 import { configPaths } from "./config.js";
 import { Ledger } from "./ledger.js";
-import { acceptUpload, authorizeUpload, IntakeUploadError } from "./intake.js";
+import { acceptUpload, authorizeUpload, IntakeUploadError, timingSafeBearerMatch } from "./intake.js";
 import { ensureUnder, textValue } from "./paths.js";
 import { processBatch, processPending } from "./processor.js";
 import { applyDocumentAction } from "./actions.js";
@@ -55,7 +55,7 @@ export function createApi(config: MailBillsConfig): FastifyInstance {
     }
   });
 
-  app.post("/api/documents/import-pdf", async (request, reply) => {
+  app.post("/api/documents/import-pdf", { preHandler: requireAdmin(config) }, async (request, reply) => {
     try {
       const parts = request.parts();
       let pdfBytes: Buffer | undefined;
@@ -94,12 +94,12 @@ export function createApi(config: MailBillsConfig): FastifyInstance {
     }
   });
 
-  app.post("/api/bootstrap", async (request, reply) => {
+  app.post("/api/bootstrap", { preHandler: requireAdmin(config) }, async (request, reply) => {
     const dryRun = parseBoolean((request.query as any).dryRun);
     return reply.send({ ok: true, dryRun, directories: bootstrapDirectories(config, { dryRun }) });
   });
 
-  app.get("/api/documents", async (request) => {
+  app.get("/api/documents", { preHandler: requireAdmin(config) }, async (request) => {
     const ledger = initializedLedger(config);
     const query = request.query as Record<string, string | undefined>;
     return {
@@ -113,19 +113,19 @@ export function createApi(config: MailBillsConfig): FastifyInstance {
     };
   });
 
-  app.get("/api/documents/:documentId", async (request, reply) => {
+  app.get("/api/documents/:documentId", { preHandler: requireAdmin(config) }, async (request, reply) => {
     const ledger = initializedLedger(config);
     const document = ledger.getDocument((request.params as any).documentId);
     if (!document) return reply.code(404).send({ ok: false, error: "document not found" });
     return { ok: true, document };
   });
 
-  app.get("/api/documents/:documentId/pdf", async (request, reply) => {
+  app.get("/api/documents/:documentId/pdf", { preHandler: requireAdmin(config) }, async (request, reply) => {
     const pdfPath = pdfPathForDocument(config, (request.params as any).documentId);
     return reply.type("application/pdf").send(fs.createReadStream(pdfPath));
   });
 
-  app.post("/api/documents/:documentId/actions", async (request, reply) => {
+  app.post("/api/documents/:documentId/actions", { preHandler: requireAdmin(config) }, async (request, reply) => {
     const body = (request.body ?? {}) as Record<string, any>;
     const ledger = initializedLedger(config);
     const result = await applyDocumentAction({
@@ -143,17 +143,26 @@ export function createApi(config: MailBillsConfig): FastifyInstance {
     return reply.code(result.ok ? 200 : 400).send(result);
   });
 
-  app.post("/api/pipeline/process-pending", async (request, reply) => {
+  app.post("/api/pipeline/process-pending", { preHandler: requireAdmin(config) }, async (request, reply) => {
     const body = (request.body ?? {}) as Record<string, any>;
     const dryRun = body.dryRun !== false;
-    const result = dryRun
-      ? await processPending({ config, ledger: initializedLedger(config), dryRun: true, stableDelayMs: Number(body.stableDelayMs ?? 1000) })
-      : await scheduler.runNow();
+    let result;
+    try {
+      result = dryRun
+        ? await processPending({ config, ledger: initializedLedger(config), dryRun: true, stableDelayMs: Number(body.stableDelayMs ?? 1000) })
+        : await scheduler.runNow();
+    } catch (error) {
+      return reply.code(500).send({
+        ok: false,
+        error: error instanceof Error ? error.message : String(error),
+        schedule: scheduler.status()
+      });
+    }
     if (!result) return reply.code(409).send({ ok: false, error: "pipeline is already running", schedule: scheduler.status() });
     return reply.code(result.errors.length ? 207 : 200).send({ ok: result.errors.length === 0, ...result });
   });
 
-  app.post("/api/pipeline/batches/:batchId/process", async (request, reply) => {
+  app.post("/api/pipeline/batches/:batchId/process", { preHandler: requireAdmin(config) }, async (request, reply) => {
     const body = (request.body ?? {}) as Record<string, any>;
     const result = await processBatch({
       batchId: (request.params as any).batchId,
@@ -164,12 +173,12 @@ export function createApi(config: MailBillsConfig): FastifyInstance {
     return reply.code(result.errors.length ? 207 : 200).send({ ok: result.errors.length === 0, ...result });
   });
 
-  app.get("/api/pipeline/schedule", async () => ({
+  app.get("/api/pipeline/schedule", { preHandler: requireAdmin(config) }, async () => ({
     ok: true,
     schedule: scheduler.status()
   }));
 
-  app.get("/api/pairing/qr", async (request, reply) => {
+  app.get("/api/pairing/qr", { preHandler: requireAdmin(config) }, async (request, reply) => {
     try {
       const query = request.query as Record<string, string | undefined>;
       const payload = buildPairingPayload({ config, baseUrl: query.baseUrl });
@@ -179,7 +188,7 @@ export function createApi(config: MailBillsConfig): FastifyInstance {
     }
   });
 
-  app.post("/api/pairing/rotate-token", async (request, reply) => {
+  app.post("/api/pairing/rotate-token", { preHandler: requireAdmin(config) }, async (request, reply) => {
     if (!config.configPath) return reply.code(400).send({ ok: false, error: "configPath is required to rotate the intake token" });
     const body = (request.body ?? {}) as Record<string, any>;
     const token = ensureConfigToken(config.configPath, { rotate: true });
@@ -188,7 +197,7 @@ export function createApi(config: MailBillsConfig): FastifyInstance {
     return { ok: true, payload, qrSvg: await svgQr(payload) };
   });
 
-  app.get("/api/status", async () => {
+  app.get("/api/status", { preHandler: requireAdmin(config) }, async () => {
     const paths = configPaths(config);
     return {
       ok: true,
@@ -303,4 +312,36 @@ function trimText(value: unknown, maxLength?: number): string | undefined {
 
 function isPdfUpload(filename?: string, mimetype?: string): boolean {
   return Boolean(filename?.toLowerCase().endsWith(".pdf") && mimetype === "application/pdf");
+}
+
+const LOOPBACK_IPS = new Set(["127.0.0.1", "::1", "::ffff:127.0.0.1"]);
+
+function isLoopback(ip: string | undefined): boolean {
+  return Boolean(ip && LOOPBACK_IPS.has(ip));
+}
+
+/**
+ * Authorization decision for management endpoints. Pure for testability.
+ *
+ * - If an admin token is configured, the request must present a constant-time
+ *   matching `Bearer <token>`.
+ * - With no admin token configured, only loopback callers are allowed; remote
+ *   (LAN) callers are rejected so a token-less install is not wide open.
+ */
+export function authorizeAdmin(input: { header?: string; ip: string | undefined; adminToken?: string }): { ok: true } | { ok: false; statusCode: number; error: string } {
+  const { header, ip, adminToken } = input;
+  if (adminToken) {
+    return timingSafeBearerMatch(header, adminToken)
+      ? { ok: true }
+      : { ok: false, statusCode: 401, error: "invalid admin token" };
+  }
+  if (isLoopback(ip)) return { ok: true };
+  return { ok: false, statusCode: 401, error: "admin token not configured; set api.admin_token to allow remote access" };
+}
+
+function requireAdmin(config: MailBillsConfig) {
+  return async (request: { headers: { authorization?: string }; ip?: string }, reply: { code(c: number): { send(body: unknown): void }; send(body: unknown): void }) => {
+    const decision = authorizeAdmin({ header: request.headers.authorization, ip: request.ip, adminToken: config.api?.adminToken });
+    if (!decision.ok) reply.code(decision.statusCode).send({ ok: false, error: decision.error });
+  };
 }

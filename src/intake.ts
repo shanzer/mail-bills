@@ -81,7 +81,23 @@ export function acceptUpload(input: {
 
 export function authorizeUpload(header: string | undefined, config: MailBillsConfig): void {
   if (!config.intakeUpload.token) throw new IntakeUploadError("intake upload token is not configured", 401);
-  if (header !== `Bearer ${config.intakeUpload.token}`) throw new IntakeUploadError("invalid intake upload token", 401);
+  if (!timingSafeBearerMatch(header, config.intakeUpload.token)) throw new IntakeUploadError("invalid intake upload token", 401);
+}
+
+/**
+ * Constant-time comparison of a `Bearer <token>` header against the expected
+ * token. Returns false (without comparing) when lengths differ, so callers must
+ * not branch on which side was wrong. Used for both the intake token and the
+ * admin API token to avoid timing-based token probing.
+ */
+export function timingSafeBearerMatch(header: string | undefined, expected: string): boolean {
+  if (typeof header !== "string") return false;
+  const prefix = "Bearer ";
+  if (!header.startsWith(prefix)) return false;
+  const presented = Buffer.from(header.slice(prefix.length));
+  const wanted = Buffer.from(expected);
+  if (presented.length !== wanted.length) return false;
+  return crypto.timingSafeEqual(presented, wanted);
 }
 
 function safeSegment(value: string, fieldName: string): void {

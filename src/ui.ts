@@ -1032,14 +1032,26 @@ function visibleDocuments() {
   });
 }
 
+function adminToken() {
+  return localStorage.getItem("mailbills.adminToken");
+}
+
 async function api(path, options = {}) {
   const headers = options.body instanceof FormData
     ? { ...(options.headers || {}) }
     : { "content-type": "application/json", ...(options.headers || {}) };
-  const response = await fetch(path, {
-    ...options,
-    headers
-  });
+  const token = adminToken();
+  if (token) headers.authorization = "Bearer " + token;
+  const response = await fetch(path, { ...options, headers });
+  if (response.status === 401) {
+    const body = await response.json().catch(() => ({}));
+    const entered = window.prompt(body.error || "Admin token required");
+    if (entered) {
+      localStorage.setItem("mailbills.adminToken", entered.trim());
+      return api(path, options);
+    }
+    throw new Error(body.error || "admin token required");
+  }
   const body = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(body.error || ("HTTP " + response.status));
   return body;

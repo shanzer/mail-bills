@@ -17,13 +17,16 @@ export function loadConfig(configPath = path.resolve("config.yaml")): MailBillsC
   const ocr = raw.ocr ?? {};
   const pipelineSchedule = raw.pipeline_schedule ?? {};
   const logging = raw.logging ?? {};
+  const api = raw.api ?? {};
 
   return {
     configPath: resolvedConfigPath,
     rootDir,
     icloudIntakeDir: optionalPath(raw.icloud_intake_dir, ownerHome),
     icloudErrorDir: optionalPath(raw.icloud_error_dir, ownerHome),
-    notionDatabaseName: raw.notion_database_name ?? "Mail & Bills",
+    api: {
+      adminToken: stringOrUndefined(api.admin_token)
+    },
     logging: {
       level: loggingLevel(logging.level ?? raw.log_level ?? "info")
     },

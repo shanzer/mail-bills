@@ -57,7 +57,7 @@ async function main(argv: string[]): Promise<number> {
     return 0;
   }
   if (command === "import") {
-    const result = scanImports({ config, dryRun: rest.includes("--dry-run"), stableDelayMs: Number(option(rest, "--stable-delay-ms") ?? 1000) });
+    const result = await scanImports({ config, dryRun: rest.includes("--dry-run"), stableDelayMs: Number(option(rest, "--stable-delay-ms") ?? 1000) });
     console.log(`Import scan (${result.dryRun ? "dry-run" : "run"}): imported=${result.imported} failed=${result.failed} skipped=${result.skipped}`);
     return result.failed ? 1 : 0;
   }

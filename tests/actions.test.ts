@@ -121,4 +121,45 @@ describe("document actions", () => {
     expect(fs.existsSync(pdfPath)).toBe(true);
     expect(events(config)).toMatchObject([{ event_type: "paperless_uploaded" }]);
   });
+
+  it("quarantines a document on delete with no Notion configuration (C2 regression)", async () => {
+    const root = tempRoot("mail-bills-delete-");
+    const config = makeConfig(root);
+    const ledger = new Ledger(configPaths(config).ledgerPath);
+    ledger.initialize();
+    ledger.upsertBatch({ batch_id: "batch-1", status: "imported", item_count: 1 });
+    const pdfPath = path.join(configPaths(config).importedIntakeDir, "doc-del-1.pdf");
+    fs.mkdirSync(path.dirname(pdfPath), { recursive: true });
+    fs.writeFileSync(pdfPath, "%PDF-1.4\n");
+    ledger.upsertDocument({ document_id: "doc-del-1", batch_id: "batch-1", status: "Actionable", local_pdf_path: pdfPath });
+
+    const result = await applyDocumentAction({ documentId: "doc-del-1", action: "delete", ledger, config, dryRun: false });
+
+    expect(result.ok).toBe(true);
+    expect(result.action).toBe("delete");
+    expect(result.payload?.quarantined).toBe(true);
+    expect(ledger.getDocument("doc-del-1")?.status).toBe("Deleted");
+    expect(ledger.getDocument("doc-del-1")?.retention_decision).toBe("Quarantined");
+    expect(fs.existsSync(pdfPath)).toBe(false);
+    expect(events(config)).toEqual(expect.arrayContaining([expect.objectContaining({ event_type: "quarantined" })]));
+  });
+
+  it("dry-runs delete without Notion and without moving files", async () => {
+    const root = tempRoot("mail-bills-delete-dry-");
+    const config = makeConfig(root);
+    const ledger = new Ledger(configPaths(config).ledgerPath);
+    ledger.initialize();
+    ledger.upsertBatch({ batch_id: "batch-1", status: "imported", item_count: 1 });
+    const pdfPath = path.join(configPaths(config).importedIntakeDir, "doc-del-2.pdf");
+    fs.mkdirSync(path.dirname(pdfPath), { recursive: true });
+    fs.writeFileSync(pdfPath, "%PDF-1.4\n");
+    ledger.upsertDocument({ document_id: "doc-del-2", batch_id: "batch-1", status: "Actionable", local_pdf_path: pdfPath });
+
+    const result = await applyDocumentAction({ documentId: "doc-del-2", action: "delete", ledger, config, dryRun: true });
+
+    expect(result.ok).toBe(true);
+    expect(result.dryRun).toBe(true);
+    expect(result.payload?.quarantined).toBe(false);
+    expect(fs.existsSync(pdfPath)).toBe(true);
+  });
 });

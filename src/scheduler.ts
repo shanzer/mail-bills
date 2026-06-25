@@ -50,10 +50,13 @@ export class PipelineScheduler {
     }, "pipeline scheduler started");
     this.timer = setInterval(() => {
       this.scheduleNext(intervalMs);
-      void this.runNow();
+      // runNow logs and rethrows internally; swallow the rejection here so a
+      // failing scheduled run does not become an unhandled rejection that
+      // crashes the process.
+      void this.runNow().catch(() => undefined);
     }, intervalMs);
     this.timer.unref?.();
-    if (this.config.pipelineSchedule.runOnStartup) void this.runNow();
+    if (this.config.pipelineSchedule.runOnStartup) void this.runNow().catch(() => undefined);
   }
 
   stop(): void {

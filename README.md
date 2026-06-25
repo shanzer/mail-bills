@@ -56,6 +56,17 @@ npm run start -- --log-level debug
 
 ## REST API
 
+### Authentication
+
+The iPhone intake endpoint (`POST /api/mail-bills/intake`) uses its own bearer token from `intake_upload.token`.
+
+Every other `/api/*` endpoint (documents, pipeline, pairing, status, bootstrap) is guarded by a shared **admin token** from `api.admin_token`:
+
+- If `api.admin_token` is set, requests must send `Authorization: Bearer <admin_token>`.
+- If it is unset, those endpoints are reachable **only from loopback** (`127.0.0.1`). Remote/LAN callers get `401` until you set a token. This keeps a token-less local install usable from the Mac while not exposing management over the LAN.
+
+The browser UI prompts for the admin token on the first `401` and stores it in `localStorage`.
+
 - `GET /` - browser UI for the local Mail Bills desk.
 - `GET /ui/styles.css` and `GET /ui/app.js` - embedded UI assets served by the API process.
 - `GET /health` - service health and ledger path.
@@ -131,7 +142,6 @@ The QR payload contains:
 - Embedded PDF text extraction with optional Vision fallback hook.
 - Deterministic classifier.
 - Conservative duplicate detection.
-- Optional Notion adapter for explicit sync/setup work.
 - Processor orchestration.
 - Review, completion, archive, and reversible quarantine actions.
 - In-process scheduler for periodic local pipeline runs.

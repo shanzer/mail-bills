@@ -20,11 +20,11 @@ export interface ImportSummary {
   dryRun: boolean;
 }
 
-export function scanImports(input: {
+export async function scanImports(input: {
   config: MailBillsConfig;
   dryRun?: boolean;
   stableDelayMs?: number;
-}): ImportSummary {
+}): Promise<ImportSummary> {
   const dryRun = Boolean(input.dryRun);
   const stableDelayMs = input.stableDelayMs ?? 1000;
   const paths = configPaths(input.config);
@@ -34,21 +34,17 @@ export function scanImports(input: {
   }
   sources.push([paths.uploadIntakeDir, paths.uploadErrorDir]);
   const uniqueSources = dedupeSources(sources);
-  return uniqueSources.reduce<ImportSummary>(
-    (total, [intakeDir, errorDir]) => {
-      const summary = scanImportDir(input.config, intakeDir, errorDir, dryRun, stableDelayMs);
-      return {
-        imported: total.imported + summary.imported,
-        failed: total.failed + summary.failed,
-        skipped: total.skipped + summary.skipped,
-        dryRun
-      };
-    },
-    { imported: 0, failed: 0, skipped: 0, dryRun }
-  );
+  const totals = { imported: 0, failed: 0, skipped: 0, dryRun };
+  for (const [intakeDir, errorDir] of uniqueSources) {
+    const summary = await scanImportDir(input.config, intakeDir, errorDir, dryRun, stableDelayMs);
+    totals.imported += summary.imported;
+    totals.failed += summary.failed;
+    totals.skipped += summary.skipped;
+  }
+  return totals;
 }
 
-function scanImportDir(config: MailBillsConfig, intakeDir: string, errorDir: string, dryRun: boolean, stableDelayMs: number): ImportSummary {
+async function scanImportDir(config: MailBillsConfig, intakeDir: string, errorDir: string, dryRun: boolean, stableDelayMs: number): Promise<ImportSummary> {
   if (!fs.existsSync(intakeDir)) return { imported: 0, failed: 0, skipped: 0, dryRun };
   let imported = 0;
   let failed = 0;
@@ -61,7 +57,7 @@ function scanImportDir(config: MailBillsConfig, intakeDir: string, errorDir: str
       skipped += 1;
       continue;
     }
-    if (!filesAreStable([pdfPath, sidecarPath], stableDelayMs)) {
+    if (!(await filesAreStable([pdfPath, sidecarPath], stableDelayMs))) {
       skipped += 1;
       continue;
     }
@@ -153,14 +149,15 @@ function checkDestinationCollision(localPdfPath: string, localSidecarPath: strin
   }
 }
 
-function filesAreStable(paths: string[], delayMs: number): boolean {
+async function filesAreStable(paths: string[], delayMs: number): Promise<boolean> {
   const before = paths.map(signature);
-  if (delayMs > 0) {
-    const end = Date.now() + delayMs;
-    while (Date.now() < end) {}
-  }
+  if (delayMs > 0) await sleep(delayMs);
   const after = paths.map(signature);
   return JSON.stringify(before) === JSON.stringify(after);
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 function signature(filePath: string): [number, number] | undefined {

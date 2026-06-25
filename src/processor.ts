@@ -52,7 +52,7 @@ export async function processPending(input: {
   const ledger = input.ledger ?? new Ledger(configPaths(input.config).ledgerPath);
   ledger.initialize();
   const services = input.services ?? defaultProcessorServices();
-  const importSummary = services.importScanner({ config: input.config, dryRun, stableDelayMs: input.stableDelayMs ?? 1000 });
+  const importSummary = await services.importScanner({ config: input.config, dryRun, stableDelayMs: input.stableDelayMs ?? 1000 });
   const batches: BatchProcessResult[] = [];
   for (const batchId of pendingBatchIds(ledger)) {
     batches.push(await processBatch({ batchId, config: input.config, ledger, dryRun, services }));

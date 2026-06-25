@@ -3,7 +3,6 @@ import path from "node:path";
 import type { DocumentRecord, MailBillsConfig } from "./types.js";
 import { Ledger } from "./ledger.js";
 import { configPaths } from "./config.js";
-import { NotionAdapter } from "./notion.js";
 import { textValue } from "./paths.js";
 
 const DELETE_CHOICES = new Set(["Ignore/delete", "Delete duplicate"]);
@@ -22,7 +21,6 @@ export async function quarantineDocument(input: {
   documentId: string;
   ledger: Ledger;
   config: MailBillsConfig;
-  notionAdapter?: NotionAdapter;
   choice: string;
   today?: Date;
   dryRun?: boolean;
@@ -57,9 +55,6 @@ export async function quarantineDocument(input: {
   input.ledger.upsertDocument(update);
   const eventPayload = { choice: input.choice, quarantined_until: quarantinedUntil, moved_files: movedFiles, permanently_deleted: false };
   input.ledger.appendEvent({ documentId: input.documentId, batchId: document.batch_id, eventType: "quarantined", payload: eventPayload });
-  const notion = input.notionAdapter ?? new NotionAdapter(input.config);
-  const result = await notion.upsertDocument(tombstone(document, update, input.choice), { dryRun: false });
-  if (!result.ok) throw new Error(result.message || "Notion tombstone upsert failed");
   return { documentId: input.documentId, dryRun: false, quarantined: true, permanentlyDeleted: false, plannedUpdate: update, movedFiles, events: [{ event_type: "quarantined", payload: eventPayload }] };
 }
 
@@ -72,29 +67,6 @@ function plannedMovesFor(document: DocumentRecord, config: MailBillsConfig, toda
     moves.push([field, source, uniqueDestination(path.join(targetDir, path.basename(source)))]);
   }
   return moves;
-}
-
-function tombstone(document: DocumentRecord, update: DocumentRecord, choice: string): DocumentRecord {
-  return {
-    document_id: update.document_id,
-    status: "Deleted",
-    category: textValue(document.category),
-    vendor: textValue(document.vendor),
-    summary: textValue(document.ocr_summary),
-    batch_id: textValue(document.batch_id),
-    local_pdf_path: textValue(update.local_pdf_path, textValue(document.local_pdf_path)),
-    retention_decision: "Quarantined",
-    quarantined_until: textValue(update.quarantined_until),
-    deleted_at: textValue(update.deleted_at),
-    deletion_reason: choice,
-    metadata: {
-      batch_id: textValue(document.batch_id),
-      deleted_at: textValue(update.deleted_at),
-      deletion_reason: choice,
-      source_status: textValue(document.status),
-      duplicate_of_document_id: textValue(document.duplicate_of_document_id)
-    }
-  };
 }
 
 function uniqueDestination(destination: string): string {

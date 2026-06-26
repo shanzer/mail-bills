@@ -137,6 +137,7 @@ export const uiHtml = `<!doctype html>
               <button class="button button-secondary" type="button" data-doc-action="complete"><span data-icon="circle-check"></span>Complete</button>
               <button class="button button-secondary" type="button" data-doc-action="send-to-paperless"><span data-icon="upload-cloud"></span>Send to Paperless</button>
               <button class="button button-danger" type="button" data-doc-action="delete"><span data-icon="trash-2"></span>Delete</button>
+              <button class="button button-danger" type="button" data-doc-action="purge"><span data-icon="x-circle"></span>Purge from disk</button>
             </div>
           </div>
         </section>
@@ -171,7 +172,7 @@ export const uiHtml = `<!doctype html>
           <div class="status-layout">
             <article class="command-block">
               <p class="section-label">Last Result</p>
-              <pre id="runOutput">No pipeline run from this UI yet.</pre>
+              <div id="runOutput" class="run-output"><span class="muted">No pipeline run from this UI yet.</span></div>
             </article>
             <article class="path-block">
               <p class="section-label">Configured Paths</p>
@@ -786,6 +787,19 @@ pre {
   color: var(--light-on-dark);
   font: 13px/1.7 "Courier New", Courier, monospace;
 }
+.run-output {
+  margin: 16px 0 0;
+  font: 13px/1.7 "Courier New", Courier, monospace;
+  color: var(--light-on-dark);
+}
+.run-summary { margin: 0; font-weight: 600; }
+.run-ok { color: #5dbe8a; }
+.run-err { color: #e57373; }
+.run-details { margin-top: 8px; }
+.run-details summary { cursor: pointer; color: var(--amber); font-size: 12px; list-style: none; }
+.run-details summary::before { content: "▸ "; }
+.run-details[open] summary::before { content: "▾ "; }
+.run-details pre { margin-top: 8px; }
 .path-block {
   margin: 0;
   border: 1px solid var(--linen-border);
@@ -1129,7 +1143,9 @@ function renderReview() {
     const status = text(doc?.status, "");
     const disabled = !doc
       || (action === "actionable" && status === "Actionable")
-      || ((action === "archive" || action === "complete") && status !== "Actionable");
+      || ((action === "archive" || action === "complete") && status !== "Actionable")
+      || (action === "delete" && status === "Deleted")
+      || (action === "purge" && status !== "Deleted");
     button.disabled = disabled;
   });
   els.openPdf.disabled = !doc;
@@ -1209,7 +1225,8 @@ function toast(message) {
 async function applyAction(action) {
   const doc = selectedDocument();
   if (!doc) return;
-  if (action === "delete" && !confirm("Quarantine or delete this document according to pipeline rules?")) return;
+  if (action === "delete" && !confirm("Move to quarantine? Files will be held for 7 days before permanent deletion.")) return;
+  if (action === "purge" && !confirm("Permanently delete files from disk? This cannot be undone.")) return;
   const body = { action, dryRun: false };
   if (action === "update-fields") {
     body.category = els.categorySelect.value;
@@ -1225,11 +1242,15 @@ async function applyAction(action) {
     method: "POST",
     body: JSON.stringify(body)
   });
-  toast(action === "send-to-paperless" ? "Sent to Paperless: " + doc.document_id : result.action + " applied to " + doc.document_id);
+  if (action === "send-to-paperless") toast("Sent to Paperless: " + doc.document_id);
+  else if (action === "purge") toast("Purged from disk: " + doc.document_id);
+  else toast(result.action + " applied to " + doc.document_id);
   if (action === "delete") {
     state.selectedId = null;
-    state.status = "All";
+    state.status = "Deleted";
     showView("console");
+  } else if (action === "purge") {
+    state.selectedId = null;
   }
   await loadDocuments();
 }
@@ -1280,7 +1301,15 @@ async function runPipeline(mode) {
     method: "POST",
     body: JSON.stringify({ dryRun })
   });
-  els.runOutput.textContent = JSON.stringify(body, null, 2);
+  const batches = Array.isArray(body.batches) ? body.batches : [];
+  const counts = batches.reduce((s, b) => ({ imported: s.imported + (b.imported || 0), failed: s.failed + (b.failed || 0), skipped: s.skipped + (b.skipped || 0) }), { imported: 0, failed: 0, skipped: 0 });
+  const ok = body.ok !== false;
+  const parts = [batches.length + " batch" + (batches.length !== 1 ? "es" : "")];
+  if (counts.imported) parts.push(counts.imported + " imported");
+  if (counts.failed) parts.push(counts.failed + " failed");
+  if (counts.skipped) parts.push(counts.skipped + " skipped");
+  const label = (dryRun ? "Dry check" : "Pipeline run") + (ok ? "" : " failed");
+  els.runOutput.innerHTML = "<p class='run-summary " + (ok ? "run-ok" : "run-err") + "'>" + (ok ? "✓" : "✗") + " " + escapeHtml(label) + " — " + escapeHtml(parts.join(", ")) + "</p><details class='run-details'><summary>Full JSON</summary><pre>" + escapeHtml(JSON.stringify(body, null, 2)) + "</pre></details>";
   toast(dryRun ? "Dry check finished." : "Pipeline run finished.");
   await Promise.all([loadDocuments(), loadStatus()]);
   showView("status");

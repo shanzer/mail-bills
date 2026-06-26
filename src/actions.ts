@@ -7,7 +7,7 @@ import { quarantineDocument } from "./quarantine.js";
 import { uploadPdfToPaperless, type PaperlessUploader } from "./paperless.js";
 import { textValue } from "./paths.js";
 
-const DOCUMENT_ACTIONS = new Set([...REVIEW_DECISIONS, "complete", "delete", "update-fields", "actionable", "send-to-paperless"]);
+const DOCUMENT_ACTIONS = new Set([...REVIEW_DECISIONS, "complete", "delete", "purge", "update-fields", "actionable", "send-to-paperless"]);
 const GENERAL_ARCHIVE_STATUSES = new Set(["Actionable", "Waiting", "Completed", "Archived"]);
 const CATEGORY_SET = new Set<string>(CATEGORY_VALUES);
 
@@ -43,6 +43,7 @@ export async function applyDocumentAction(input: {
     if (input.action === "actionable") return markActionable(document, input, dryRun);
     if (input.action === "complete") return completeDocument(document, input.ledger, dryRun);
     if (input.action === "delete") return deleteDocument(input, dryRun);
+    if (input.action === "purge") return purgeDocument(document, input.ledger, dryRun);
     if (input.action === "send-to-paperless") return await sendToPaperless(document, input, dryRun);
     if (input.action === "archive" && GENERAL_ARCHIVE_STATUSES.has(textValue(document.status))) return archiveDocument(document, input.ledger, dryRun);
     const review = await resolveReview({ ...input, decision: input.action, dryRun });
@@ -166,6 +167,21 @@ async function deleteDocument(input: Parameters<typeof applyDocumentAction>[0], 
   const choice = input.deleteChoice ?? (textValue(document?.duplicate_of_document_id) || textValue(document?.status) === "Duplicate" ? "Delete duplicate" : "Ignore/delete");
   const result = await quarantineDocument({ documentId: input.documentId, ledger: input.ledger, config: input.config, choice, today: input.today, dryRun });
   return { documentId: input.documentId, action: "delete", ok: true, dryRun, payload: { choice, planned_update: result.plannedUpdate, quarantined: result.quarantined, permanently_deleted: result.permanentlyDeleted, moved_files: result.movedFiles, events: result.events } };
+}
+
+function purgeDocument(document: DocumentRecord, ledger: Ledger, dryRun: boolean): DocumentActionResult {
+  if (textValue(document.status) !== "Deleted") throw new Error(`Purge requires Deleted status; got: ${document.status}`);
+  const filePaths = (["local_pdf_path", "sidecar_path"] as const)
+    .map((f) => textValue(document[f]))
+    .filter(Boolean) as string[];
+  if (!dryRun) {
+    for (const p of filePaths) {
+      if (fs.existsSync(p)) fs.unlinkSync(p);
+    }
+    ledger.upsertDocument({ document_id: document.document_id, retention_decision: "Purged", local_pdf_path: null, sidecar_path: null });
+    ledger.appendEvent({ documentId: document.document_id, batchId: document.batch_id, eventType: "purged", payload: { deleted_files: filePaths } });
+  }
+  return { documentId: document.document_id, action: "purge", ok: true, dryRun, payload: { deleted_files: filePaths, permanently_deleted: !dryRun } };
 }
 
 function applyDueDateUpdate(update: DocumentRecord, dueDate?: string | null, clearDueDate = false): void {

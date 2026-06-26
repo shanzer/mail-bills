@@ -162,4 +162,58 @@ describe("document actions", () => {
     expect(result.payload?.quarantined).toBe(false);
     expect(fs.existsSync(pdfPath)).toBe(true);
   });
+
+  it("purges quarantined files from disk and marks ledger Purged", async () => {
+    const root = tempRoot("mail-bills-purge-");
+    const config = makeConfig(root);
+    const ledger = new Ledger(configPaths(config).ledgerPath);
+    ledger.initialize();
+    ledger.upsertBatch({ batch_id: "batch-1", status: "imported", item_count: 1 });
+    const pdfPath = path.join(configPaths(config).importedIntakeDir, "doc-purge-1.pdf");
+    fs.mkdirSync(path.dirname(pdfPath), { recursive: true });
+    fs.writeFileSync(pdfPath, "%PDF-1.4\n");
+    ledger.upsertDocument({ document_id: "doc-purge-1", batch_id: "batch-1", status: "Actionable", local_pdf_path: pdfPath });
+    await applyDocumentAction({ documentId: "doc-purge-1", action: "delete", ledger, config, dryRun: false });
+    const quarantinedPath = ledger.getDocument("doc-purge-1")!.local_pdf_path!;
+    expect(fs.existsSync(quarantinedPath)).toBe(true);
+
+    const result = await applyDocumentAction({ documentId: "doc-purge-1", action: "purge", ledger, config, dryRun: false });
+
+    expect(result.ok).toBe(true);
+    expect(result.action).toBe("purge");
+    expect(result.payload?.permanently_deleted).toBe(true);
+    expect(fs.existsSync(quarantinedPath)).toBe(false);
+    expect(ledger.getDocument("doc-purge-1")?.retention_decision).toBe("Purged");
+    expect(ledger.getDocument("doc-purge-1")?.local_pdf_path).toBeNull();
+    expect(events(config)).toEqual(expect.arrayContaining([expect.objectContaining({ event_type: "purged" })]));
+  });
+
+  it("dry-runs purge without deleting files", async () => {
+    const root = tempRoot("mail-bills-purge-dry-");
+    const config = makeConfig(root);
+    const ledger = new Ledger(configPaths(config).ledgerPath);
+    ledger.initialize();
+    ledger.upsertBatch({ batch_id: "batch-1", status: "imported", item_count: 1 });
+    const pdfPath = path.join(configPaths(config).importedIntakeDir, "doc-purge-2.pdf");
+    fs.mkdirSync(path.dirname(pdfPath), { recursive: true });
+    fs.writeFileSync(pdfPath, "%PDF-1.4\n");
+    ledger.upsertDocument({ document_id: "doc-purge-2", batch_id: "batch-1", status: "Actionable", local_pdf_path: pdfPath });
+    await applyDocumentAction({ documentId: "doc-purge-2", action: "delete", ledger, config, dryRun: false });
+    const quarantinedPath = ledger.getDocument("doc-purge-2")!.local_pdf_path!;
+
+    const result = await applyDocumentAction({ documentId: "doc-purge-2", action: "purge", ledger, config, dryRun: true });
+
+    expect(result.ok).toBe(true);
+    expect(result.dryRun).toBe(true);
+    expect(result.payload?.permanently_deleted).toBe(false);
+    expect(fs.existsSync(quarantinedPath)).toBe(true);
+    expect(ledger.getDocument("doc-purge-2")?.retention_decision).toBe("Quarantined");
+  });
+
+  it("rejects purge on a document that is not in Deleted status", async () => {
+    const { config, ledger } = seededDocument();
+    const result = await applyDocumentAction({ documentId: "doc-paperless-1", action: "purge", ledger, config });
+    expect(result.ok).toBe(false);
+    expect(result.error).toContain("Purge requires Deleted status");
+  });
 });

@@ -13,9 +13,6 @@ struct PairingView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: AppTheme.Spacing.md) {
                     VStack(alignment: .leading, spacing: AppTheme.Spacing.xs) {
-                        Text("{ mail bills }")
-                            .font(.appMono)
-                            .foregroundStyle(AppTheme.ColorPalette.charcoal)
                         Text("Pair to your Mac intake receiver")
                             .font(.appDisplay)
                             .foregroundStyle(AppTheme.ColorPalette.charcoal)
@@ -43,6 +40,19 @@ struct PairingView: View {
                 .padding(AppTheme.Spacing.sm)
             }
             .background(AppTheme.ColorPalette.linen.ignoresSafeArea())
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) { BrandWordmark() }
+                ToolbarItem(placement: .topBarTrailing) {
+                    Text("PAIRING")
+                        .font(.appSectionLabel)
+                        .tracking(3)
+                        .foregroundStyle(AppTheme.ColorPalette.lightOnDark)
+                }
+            }
+            .toolbarBackground(AppTheme.ColorPalette.charcoal, for: .navigationBar)
+            .toolbarBackground(.visible, for: .navigationBar)
+            .toolbarColorScheme(.dark, for: .navigationBar)
         }
         .sheet(isPresented: $showingQRScanner) {
             NavigationStack {

@@ -35,6 +35,18 @@ struct ScanView: View {
             }
             .background(AppTheme.ColorPalette.linen.ignoresSafeArea())
             .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) { BrandWordmark() }
+                ToolbarItem(placement: .topBarTrailing) {
+                    Text("SCANNER")
+                        .font(.appSectionLabel)
+                        .tracking(3)
+                        .foregroundStyle(AppTheme.ColorPalette.lightOnDark)
+                }
+            }
+            .toolbarBackground(AppTheme.ColorPalette.charcoal, for: .navigationBar)
+            .toolbarBackground(.visible, for: .navigationBar)
+            .toolbarColorScheme(.dark, for: .navigationBar)
             .sheet(isPresented: $isShowingScanner) {
                 DocumentScannerView(
                     onCancel: {

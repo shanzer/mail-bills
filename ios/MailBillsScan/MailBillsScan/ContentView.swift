@@ -1,15 +1,21 @@
 import SwiftUI
+import UIKit
 
 struct ContentView: View {
     @State private var pairing: PairingPayload?
     @State private var errorText: String?
     private let store = PairingStore()
+    private let isIPad = UIDevice.current.userInterfaceIdiom == .pad
 
     var body: some View {
         Group {
             if let pairing {
-                ScanView(pairing: pairing) {
-                    resetPairing()
+                if isIPad {
+                    IPadScanView(pairing: pairing, onResetPairing: resetPairing)
+                } else {
+                    ScanView(pairing: pairing) {
+                        resetPairing()
+                    }
                 }
             } else {
                 PairingView { payload in

@@ -25,6 +25,9 @@
 		100000000000000000000110 /* AppTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000211 /* AppTheme.swift */; };
 		100000000000000000000111 /* AppComponents.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000212 /* AppComponents.swift */; };
 		100000000000000000000112 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000213 /* Assets.xcassets */; };
+		100000000000000000000113 /* CameraSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000214 /* CameraSession.swift */; };
+		100000000000000000000114 /* CameraPreviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000215 /* CameraPreviewView.swift */; };
+		100000000000000000000115 /* IPadScanView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000216 /* IPadScanView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -48,6 +51,9 @@
 		100000000000000000000211 /* AppTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppTheme.swift; sourceTree = "<group>"; };
 		100000000000000000000212 /* AppComponents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppComponents.swift; sourceTree = "<group>"; };
 		100000000000000000000213 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		100000000000000000000214 /* CameraSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraSession.swift; sourceTree = "<group>"; };
+		100000000000000000000215 /* CameraPreviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraPreviewView.swift; sourceTree = "<group>"; };
+		100000000000000000000216 /* IPadScanView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IPadScanView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -110,6 +116,7 @@
 				100000000000000000000209 /* UploadClient.swift */,
 				10000000000000000000020A /* PDFBuilder.swift */,
 				100000000000000000000210 /* OutboxStore.swift */,
+				100000000000000000000214 /* CameraSession.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -121,6 +128,7 @@
 				10000000000000000000020F /* PairingQRScannerView.swift */,
 				10000000000000000000020C /* PairingView.swift */,
 				10000000000000000000020D /* ScanView.swift */,
+				100000000000000000000216 /* IPadScanView.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -139,6 +147,7 @@
 			children = (
 				100000000000000000000211 /* AppTheme.swift */,
 				100000000000000000000212 /* AppComponents.swift */,
+				100000000000000000000215 /* CameraPreviewView.swift */,
 			);
 			path = UI;
 			sourceTree = "<group>";
@@ -229,6 +238,9 @@
 				10000000000000000000010D /* ScanView.swift in Sources */,
 				100000000000000000000110 /* AppTheme.swift in Sources */,
 				100000000000000000000111 /* AppComponents.swift in Sources */,
+				100000000000000000000113 /* CameraSession.swift in Sources */,
+				100000000000000000000114 /* CameraPreviewView.swift in Sources */,
+				100000000000000000000115 /* IPadScanView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -372,7 +384,7 @@
 				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = 1;
+				TARGETED_DEVICE_FAMILY = "1,2";
 			};
 			name = Debug;
 		};
@@ -399,7 +411,7 @@
 				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = 1;
+				TARGETED_DEVICE_FAMILY = "1,2";
 			};
 			name = Release;
 		};

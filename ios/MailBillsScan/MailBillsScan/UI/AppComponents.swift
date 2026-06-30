@@ -1,5 +1,20 @@
 import SwiftUI
 
+// Renders the "{ mail bills }" wordmark with mandatory amber brackets on a dark background.
+struct BrandWordmark: View {
+    var body: some View {
+        (
+            Text("{ ")
+                .foregroundStyle(AppTheme.ColorPalette.amber)
+            + Text("mail bills")
+                .foregroundStyle(AppTheme.ColorPalette.linen)
+            + Text(" }")
+                .foregroundStyle(AppTheme.ColorPalette.amber)
+        )
+        .font(Font.system(.footnote, design: .monospaced, weight: .semibold))
+    }
+}
+
 struct WorkSurface<Content: View>: View {
     let spacing: CGFloat
     let padding: CGFloat

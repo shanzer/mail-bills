@@ -32,6 +32,8 @@ export async function applyDocumentAction(input: {
   deleteChoice?: string;
   category?: string | null;
   shortcutLabel?: string | null;
+  vendor?: string | null;
+  notes?: string | null;
   paperlessUploader?: PaperlessUploader;
 }): Promise<DocumentActionResult> {
   const dryRun = Boolean(input.dryRun);
@@ -127,6 +129,8 @@ function updateDocumentFields(document: DocumentRecord, input: Parameters<typeof
   if (input.shortcutLabel !== undefined && input.shortcutLabel !== null) {
     update.shortcut_label = textValue(input.shortcutLabel) || null;
   }
+  if (input.vendor !== undefined) update.vendor = textValue(input.vendor) || null;
+  if (input.notes !== undefined) update.notes = textValue(input.notes) || null;
   applyDueDateUpdate(update, input.dueDate, Boolean(input.clearDueDate));
   if (Object.keys(update).length === 1) throw new Error("No fields supplied to update");
   if (!dryRun) {
@@ -158,6 +162,8 @@ function editableFieldsUpdate(document: DocumentRecord, input: Parameters<typeof
   if (input.shortcutLabel !== undefined && input.shortcutLabel !== null) {
     update.shortcut_label = textValue(input.shortcutLabel) || null;
   }
+  if (input.vendor !== undefined) update.vendor = textValue(input.vendor) || null;
+  if (input.notes !== undefined) update.notes = textValue(input.notes) || null;
   applyDueDateUpdate(update, input.dueDate, Boolean(input.clearDueDate));
   return update;
 }

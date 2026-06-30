@@ -138,7 +138,9 @@ export function createApi(config: MailBillsConfig): FastifyInstance {
       clearDueDate: parseBoolean(body.clearDueDate),
       deleteChoice: body.deleteChoice,
       category: body.category ?? undefined,
-      shortcutLabel: body.shortcutLabel ?? undefined
+      shortcutLabel: body.shortcutLabel ?? undefined,
+      vendor: body.vendor ?? undefined,
+      notes: body.notes ?? undefined
     });
     return reply.code(result.ok ? 200 : 400).send(result);
   });

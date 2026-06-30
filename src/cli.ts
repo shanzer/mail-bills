@@ -8,6 +8,7 @@ import { startApi } from "./api.js";
 import { needsReviewDocuments, resolveReview } from "./review.js";
 import { applyDocumentAction } from "./actions.js";
 import { buildPairingPayload, ensureConfigToken, pairingPayloadJson, postSampleUpload, terminalQr, writeQrPng } from "./pairing.js";
+import { extractBillSummary } from "./summarizer.js";
 
 async function main(argv: string[]): Promise<number> {
   const [command, ...rest] = argv;
@@ -102,6 +103,31 @@ async function main(argv: string[]): Promise<number> {
     console.log(JSON.stringify(result, null, 2));
     return result.ok ? 0 : 1;
   }
+  if (command === "backfill-summaries") {
+    const dryRun = rest.includes("--dry-run");
+    const ledger = new Ledger(configPaths(config).ledgerPath);
+    ledger.initialize();
+    const docs = ledger.documentsNeedingSummary();
+    console.log(`Found ${docs.length} document(s) without a bill summary.${dryRun ? " (dry-run)" : ""}`);
+    let ok = 0;
+    let failed = 0;
+    for (const doc of docs) {
+      process.stdout.write(`  ${doc.document_id} ... `);
+      const json = await extractBillSummary(doc.ocr_text ?? "").catch(() => null);
+      if (!json) {
+        process.stdout.write("failed\n");
+        failed += 1;
+        continue;
+      }
+      if (!dryRun) {
+        ledger.upsertDocument({ document_id: doc.document_id, ocr_summary_json: JSON.stringify(json) });
+      }
+      process.stdout.write(`ok (${Object.keys(json).filter((k) => (json as Record<string, unknown>)[k] !== undefined).length} fields)\n`);
+      ok += 1;
+    }
+    console.log(`Done: ${ok} updated, ${failed} failed.`);
+    return failed ? 1 : 0;
+  }
   throw new Error(`unknown command: ${command}`);
 }
 
@@ -122,6 +148,7 @@ Commands:
   review list
   review resolve <documentId> --decision <decision>
   action <documentId> --action <action>
+  backfill-summaries [--dry-run]
   pairing [--write-token|--rotate-token] [--base-url <url>] [--qr] [--qr-png <path>] [--test-upload]
 `);
 }

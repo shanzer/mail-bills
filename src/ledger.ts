@@ -29,6 +29,8 @@ const DOCUMENT_COLUMNS = new Set([
   "due_date",
   "ocr_text",
   "ocr_summary",
+  "ocr_summary_json",
+  "notes",
   "confidence",
   "review_reason",
   "urgency_reasons_json",
@@ -73,6 +75,7 @@ export class Ledger {
           due_date TEXT,
           ocr_text TEXT,
           ocr_summary TEXT,
+          ocr_summary_json TEXT,
           confidence TEXT,
           review_reason TEXT,
           urgency_reasons_json TEXT,
@@ -81,6 +84,7 @@ export class Ledger {
           duplicate_of_document_id TEXT,
           deleted_at TEXT,
           error_message TEXT,
+          notes TEXT,
           FOREIGN KEY(batch_id) REFERENCES batches(batch_id)
         );
 
@@ -93,6 +97,10 @@ export class Ledger {
           payload_json TEXT
         );
       `);
+      // Migrate existing databases that predate added columns.
+      for (const col of ["ocr_summary_json TEXT", "notes TEXT"]) {
+        try { db.exec(`ALTER TABLE documents ADD COLUMN ${col}`); } catch { /* already exists */ }
+      }
     } finally {
       db.close();
     }
@@ -120,6 +128,12 @@ export class Ledger {
 
   documentsByStatus(status: string): DocumentRecord[] {
     return this.fetchAll<DocumentRecord>("SELECT * FROM documents WHERE status = ? ORDER BY document_id", status);
+  }
+
+  documentsNeedingSummary(): DocumentRecord[] {
+    return this.fetchAll<DocumentRecord>(
+      "SELECT * FROM documents WHERE ocr_text IS NOT NULL AND ocr_text != '' AND (ocr_summary_json IS NULL OR ocr_summary_json = '') ORDER BY document_id"
+    );
   }
 
   listDocuments(options: { status?: string; q?: string; limit?: number; offset?: number } = {}): DocumentRecord[] {

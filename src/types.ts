@@ -91,6 +91,7 @@ export interface DocumentRecord {
   due_date?: string | null;
   ocr_text?: string | null;
   ocr_summary?: string | null;
+  ocr_summary_json?: string | null;
   confidence?: string | null;
   review_reason?: string | null;
   urgency_reasons_json?: string | null;
@@ -103,6 +104,7 @@ export interface DocumentRecord {
   metadata?: Record<string, unknown> | null;
   summary?: string | null;
   deletion_reason?: string | null;
+  notes?: string | null;
 }
 
 export interface EventRecord {

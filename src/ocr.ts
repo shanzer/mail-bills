@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import { PDFParse } from "pdf-parse";
 import type { OcrConfig } from "./types.js";
 import { Ledger } from "./ledger.js";
+import { extractBillSummary, type BillSummary } from "./summarizer.js";
 
 const VISION_HELPER_TIMEOUT_MS = 60_000;
 const OLLAMA_TIMEOUT_MS = 120_000;
@@ -41,6 +42,7 @@ export interface OcrResult {
   modelProvider?: string;
   modelName?: string;
   extractionMethod: "embedded" | "vision";
+  structuredJson?: BillSummary | null;
 }
 
 const SUMMARY_MAX_CHARS = 500;
@@ -100,11 +102,13 @@ export async function processOcrDocument(input: {
   if (!document) throw new Error(`document not found: ${input.documentId}`);
   if (!document.local_pdf_path) throw new Error(`document has no local_pdf_path: ${input.documentId}`);
   const result = await extractPdfText({ pdfPath: document.local_pdf_path, ocrConfig: input.ocrConfig });
+  result.structuredJson = await extractBillSummary(result.text).catch(() => null);
   if (!input.dryRun) {
     input.ledger.upsertDocument({
       document_id: input.documentId,
       ocr_text: result.text,
       ocr_summary: result.summary,
+      ocr_summary_json: result.structuredJson ? JSON.stringify(result.structuredJson) : null,
       confidence: result.confidence,
       review_reason: result.reviewReason,
       status: result.needsFallback ? "Needs Review" : document.status ?? "imported"

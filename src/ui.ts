@@ -117,6 +117,8 @@ export const uiHtml = `<!doctype html>
                 <div class="field-editor">
                   <label>Category<select id="categorySelect"></select></label>
                   <label>Label<input id="shortcutLabel" type="text" /></label>
+                  <label>Vendor<input id="vendorInput" type="text" placeholder="Override detected vendor" /></label>
+                  <label>Notes<textarea id="notesInput" rows="3" placeholder="Free-form notes"></textarea></label>
                 </div>
               </article>
               <article class="info-block">
@@ -633,6 +635,19 @@ tr:hover td { background: #fbfaf6; }
   color: var(--body-text);
   font: 14px/1.65 "Courier New", Courier, monospace;
 }
+.bill-summary { overflow: auto; display: grid; gap: 16px; align-content: start; }
+.bill-amounts { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 8px; margin: 0; }
+.bill-amount-card { padding: 10px 14px; border: 1px solid var(--linen-border); border-radius: 6px; background: var(--linen); }
+.bill-amount-card dt { font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--mid-gray); margin-bottom: 4px; }
+.bill-amount-card dd { font-size: 18px; font-weight: 700; color: var(--charcoal); margin: 0; text-align: left; }
+.bill-amount-card.highlight dd { color: var(--amber-dark); }
+.bill-info-fields { display: grid; gap: 8px; margin: 0; }
+.bill-info-fields div { display: flex; justify-content: space-between; gap: 12px; border-bottom: 1px solid var(--linen-border); padding-bottom: 6px; }
+.bill-info-fields dt { color: var(--mid-gray); white-space: nowrap; }
+.bill-info-fields dd { margin: 0; color: var(--charcoal); font-weight: 600; text-align: right; overflow-wrap: anywhere; }
+.bill-methods { display: flex; flex-wrap: wrap; gap: 6px; list-style: none; margin: 6px 0 0; padding: 0; }
+.bill-method { padding: 3px 10px; background: var(--charcoal); color: var(--light-on-dark); border-radius: 3px; font-size: 12px; }
+.bill-section { display: grid; gap: 4px; }
 .inspector { display: grid; align-content: start; gap: 16px; }
 .info-block {
   margin: 0;
@@ -959,6 +974,8 @@ const els = {
   fieldList: document.getElementById("fieldList"),
   categorySelect: document.getElementById("categorySelect"),
   shortcutLabel: document.getElementById("shortcutLabel"),
+  vendorInput: document.getElementById("vendorInput"),
+  notesInput: document.getElementById("notesInput"),
   dueDate: document.getElementById("dueDate"),
   clearDueDate: document.getElementById("clearDueDate"),
   board: document.getElementById("boardColumns"),
@@ -1137,13 +1154,14 @@ function renderReview() {
       "<span class='muted'>" + escapeHtml(doc.review_reason || "Review required") + "</span><span class='mono muted'>" + escapeHtml(doc.batch_id) + "</span></span></button>";
   }).join("") || "<div class='empty-state is-visible'>No documents need review.</div>";
 
-  const doc = reviewDocs.find((item) => item.document_id === state.selectedId) || null;
+  const doc = selectedDocument();
   document.querySelectorAll("[data-doc-action]").forEach((button) => {
     const action = button.getAttribute("data-doc-action");
     const status = text(doc?.status, "");
     const disabled = !doc
       || (action === "actionable" && status === "Actionable")
-      || ((action === "archive" || action === "complete") && status !== "Actionable")
+      || (action === "archive" && (status === "Archived" || status === "Deleted"))
+      || (action === "complete" && (status === "Completed" || status === "Deleted"))
       || (action === "delete" && status === "Deleted")
       || (action === "purge" && status !== "Deleted");
     button.disabled = disabled;
@@ -1155,22 +1173,84 @@ function renderReview() {
     els.fieldList.innerHTML = "";
     els.categorySelect.value = "UNKNOWN";
     els.shortcutLabel.value = "";
+    els.vendorInput.value = "";
+    els.notesInput.value = "";
     els.dueDate.value = "";
     els.clearDueDate.checked = false;
     return;
   }
   els.reviewTitle.textContent = vendorName(doc);
   const pdfHref = "/api/documents/" + encodeURIComponent(doc.document_id) + "/pdf";
-  els.pdfStage.innerHTML = "<article class='ocr-document'><header><div><p class='section-label'>OCR Text</p><h3>" + escapeHtml(vendorName(doc)) + "</h3></div><a class='button button-primary' href='" + pdfHref + "' target='_blank' rel='noopener'>" + icon("external-link") + "Open PDF Viewer</a></header><pre>" + escapeHtml(doc.ocr_text || doc.ocr_summary || "No OCR text captured yet. Run the pipeline to extract text and generate a summary.") + "</pre></article>";
+  const billJson = doc.ocr_summary_json ? (function() { try { return JSON.parse(doc.ocr_summary_json); } catch(e) { return null; } })() : null;
+  els.pdfStage.innerHTML = "<article class='ocr-document'><header><div><p class='section-label'>Bill Summary</p><h3>" + escapeHtml(vendorName(doc)) + "</h3></div><a class='button button-primary' href='" + pdfHref + "' target='_blank' rel='noopener'>" + icon("external-link") + "Open PDF Viewer</a></header>" + renderBillSummary(billJson) + "</article>";
   els.fieldList.innerHTML = field("Category", doc.category) + field("Shortcut Label", doc.shortcut_label) + field("Due Date", doc.due_date) + field("Amount", doc.amount) + field("Confidence", doc.confidence);
   els.categorySelect.value = categories.includes(doc.category) ? doc.category : "UNKNOWN";
   els.shortcutLabel.value = text(doc.shortcut_label || doc.category, "");
+  els.vendorInput.value = text(doc.vendor, "");
+  els.notesInput.value = text(doc.notes, "");
   els.dueDate.value = text(doc.due_date, "");
   els.clearDueDate.checked = false;
 }
 
 function field(label, value) {
   return "<div><dt>" + escapeHtml(label) + "</dt><dd>" + escapeHtml(value) + "</dd></div>";
+}
+
+function renderBillSummary(json) {
+  if (!json) {
+    return "<p class='muted' style='padding:8px 0'>No bill summary yet. Run the pipeline to extract and analyze this document.</p>";
+  }
+  let html = "<div class='bill-summary'>";
+
+  // Prominent amount/status cards
+  const cards = [];
+  if (json.amount_due) cards.push(["Amount Due", json.amount_due, true]);
+  if (json.balance_due && json.balance_due !== json.amount_due) cards.push(["Balance Due", json.balance_due, true]);
+  if (json.total_balance && json.total_balance !== json.amount_due) cards.push(["Total Balance", json.total_balance, false]);
+  if (json.due_date) cards.push(["Due Date", json.due_date, false]);
+  if (json.payment_status) cards.push(["Status", json.payment_status, json.payment_status === "Past Due"]);
+  if (cards.length) {
+    html += "<dl class='bill-amounts'>";
+    cards.forEach(function(c) {
+      html += "<div class='bill-amount-card" + (c[2] ? " highlight" : "") + "'><dt>" + escapeHtml(c[0]) + "</dt><dd>" + escapeHtml(c[1]) + "</dd></div>";
+    });
+    html += "</dl>";
+  }
+
+  // Info fields
+  const bi = json.bill_info || {};
+  const ah = json.account_holder || {};
+  const gi = json.guarantor_info || {};
+  const ip = json.insurance_provider || {};
+  const rows = [];
+  if (bi.sender) rows.push(["From", bi.sender]);
+  if (bi.mail_address) rows.push(["Mailing Address", bi.mail_address]);
+  if (bi.website) rows.push(["Website", bi.website]);
+  if (bi.phone_number) rows.push(["Phone", bi.phone_number]);
+  if (ah.name) rows.push(["Account Holder", ah.name]);
+  if (ah.account_number) rows.push(["Account #", ah.account_number]);
+  if (gi.name && gi.name !== ah.name) rows.push(["Guarantor", gi.name]);
+  if (ip.name) rows.push(["Insurance", ip.name]);
+  if (ip.coverage) rows.push(["Coverage", ip.coverage]);
+  if (rows.length) {
+    html += "<dl class='bill-info-fields'>";
+    rows.forEach(function(r) {
+      html += "<div><dt>" + escapeHtml(r[0]) + "</dt><dd>" + escapeHtml(r[1]) + "</dd></div>";
+    });
+    html += "</dl>";
+  }
+
+  // Payment methods
+  if (json.payment_methods && json.payment_methods.length) {
+    html += "<div class='bill-section'><p class='section-label'>Payment Methods</p><ul class='bill-methods'>";
+    json.payment_methods.forEach(function(m) {
+      html += "<li class='bill-method'>" + escapeHtml(m) + "</li>";
+    });
+    html += "</ul></div>";
+  }
+
+  html += "</div>";
+  return html;
 }
 
 function renderBoard() {
@@ -1231,10 +1311,14 @@ async function applyAction(action) {
   if (action === "update-fields") {
     body.category = els.categorySelect.value;
     body.shortcutLabel = els.shortcutLabel.value;
+    body.vendor = els.vendorInput.value;
+    body.notes = els.notesInput.value;
   }
   if (action === "actionable") {
     body.category = els.categorySelect.value;
     body.shortcutLabel = els.shortcutLabel.value;
+    body.vendor = els.vendorInput.value;
+    body.notes = els.notesInput.value;
   }
   if (els.clearDueDate.checked) body.clearDueDate = true;
   else if (els.dueDate.value) body.dueDate = els.dueDate.value;

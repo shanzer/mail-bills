@@ -47,6 +47,10 @@ const els = {
   importPdfCategory: document.getElementById("importPdfCategory"),
   importPdfLabel: document.getElementById("importPdfLabel"),
   importPdfNote: document.getElementById("importPdfNote"),
+  pipelineChip: document.getElementById("pipelineChip"),
+  tokenDialog: document.getElementById("tokenDialog"),
+  tokenDialogMessage: document.getElementById("tokenDialogMessage"),
+  tokenDialogInput: document.getElementById("tokenDialogInput"),
   toast: document.getElementById("toast")
 };
 
@@ -96,12 +100,13 @@ function isOverdue(doc) {
 }
 
 function statusClass(doc) {
-  if (isOverdue(doc)) return "status-overdue";
-  if (doc.status === "Needs Review") return "status-review";
-  if (doc.status === "Actionable") return "status-actionable";
-  if (doc.status === "Completed") return "status-completed";
-  if (doc.status === "Archived" || doc.status === "Deleted") return "status-muted";
-  return "status-default";
+  if (isOverdue(doc)) return "chip-attention";
+  if (doc.status === "Needs Review") return "chip-review";
+  if (doc.status === "Actionable") return "chip-attention";
+  if (doc.status === "Completed" || doc.status === "Archived") return "chip-done";
+  if (doc.status === "Deleted" || doc.status === "Duplicate") return "chip-quiet";
+  if (doc.status === "Error") return "chip-error";
+  return "chip-slate";
 }
 
 function visibleDocuments() {
@@ -120,6 +125,27 @@ function adminToken() {
   return localStorage.getItem("mailbills.adminToken");
 }
 
+let tokenDialogPending = null;
+
+function promptToken(message) {
+  if (!els.tokenDialog || typeof els.tokenDialog.showModal !== "function") {
+    return Promise.resolve(window.prompt(message));
+  }
+  if (tokenDialogPending) return tokenDialogPending;
+  els.tokenDialogMessage.textContent = message;
+  els.tokenDialogInput.value = "";
+  tokenDialogPending = new Promise((resolve) => {
+    els.tokenDialog.addEventListener("close", () => {
+      tokenDialogPending = null;
+      resolve(els.tokenDialog.returnValue === "submit" ? els.tokenDialogInput.value : null);
+    }, { once: true });
+  });
+  els.tokenDialog.returnValue = "cancel";
+  els.tokenDialog.showModal();
+  els.tokenDialogInput.focus();
+  return tokenDialogPending;
+}
+
 async function api(path, options = {}) {
   const headers = options.body instanceof FormData
     ? { ...(options.headers || {}) }
@@ -129,8 +155,8 @@ async function api(path, options = {}) {
   const response = await fetch(path, { ...options, headers });
   if (response.status === 401) {
     const body = await response.json().catch(() => ({}));
-    const entered = window.prompt(body.error || "Admin token required");
-    if (entered) {
+    const entered = await promptToken(body.error || "Admin token required");
+    if (entered && entered.trim()) {
       localStorage.setItem("mailbills.adminToken", entered.trim());
       return api(path, options);
     }
@@ -181,14 +207,12 @@ function renderTable() {
   els.workListTitle.textContent = state.status === "All" ? "All Documents" : state.status === "imported" ? "Imported" : state.status;
   els.rows.innerHTML = docs.map((doc) => {
     const statusLabel = isOverdue(doc) ? "Overdue" : text(doc.status, "Inbox");
-    return "<tr>" +
-      "<td><span class='vendor-cell'>" + escapeHtml(vendorName(doc)) + "</span><br><span class='muted mono'>" + escapeHtml(doc.document_id) + "</span></td>" +
-      "<td><span class='status-pill " + statusClass(doc) + "'>" + escapeHtml(statusLabel) + "</span></td>" +
+    return "<tr" + (doc.document_id === state.selectedId ? " class='is-selected'" : "") + ">" +
+      "<td><button class='row-open' type='button' data-open-doc='" + escapeHtml(doc.document_id) + "'>" + escapeHtml(vendorName(doc)) + "</button><span class='muted mono doc-id'>" + escapeHtml(doc.document_id) + "</span></td>" +
+      "<td class='amount-cell'>" + escapeHtml(doc.amount) + "</td>" +
+      "<td class='" + (isOverdue(doc) ? "due-overdue" : "muted") + "'>" + escapeHtml(doc.due_date) + "</td>" +
+      "<td><span class='chip " + statusClass(doc) + "'>" + escapeHtml(statusLabel) + "</span></td>" +
       "<td class='muted'>" + escapeHtml(doc.category || doc.detected_category || doc.shortcut_label) + "</td>" +
-      "<td class='" + (isOverdue(doc) ? "vendor-cell" : "muted") + "'>" + escapeHtml(doc.due_date) + "</td>" +
-      "<td class='muted'>" + escapeHtml(doc.review_reason || doc.error_message || doc.ocr_summary) + "</td>" +
-      "<td class='muted mono'>" + escapeHtml(doc.batch_id) + "</td>" +
-      "<td><button class='button button-secondary' type='button' data-open-doc='" + escapeHtml(doc.document_id) + "'>Open</button></td>" +
     "</tr>";
   }).join("");
   els.empty.classList.toggle("is-visible", docs.length === 0);
@@ -205,7 +229,7 @@ function renderReview() {
     return "<button class='review-card" + (doc.document_id === state.selectedId ? " is-active" : "") + "' type='button' data-select-review='" + escapeHtml(doc.document_id) + "'>" +
       "<span class='badge'>" + icon("shield-check") + "</span><span><strong>" + escapeHtml(vendorName(doc)) + "</strong>" +
       "<span class='muted'>" + escapeHtml(doc.review_reason || "Review required") + "</span><span class='mono muted'>" + escapeHtml(doc.batch_id) + "</span></span></button>";
-  }).join("") || "<div class='empty-state is-visible'>No documents need review.</div>";
+  }).join("") || "<div class='empty-state is-visible'>Nothing needs review.</div>";
 
   const doc = selectedDocument();
   document.querySelectorAll("[data-doc-action]").forEach((button) => {
@@ -222,7 +246,7 @@ function renderReview() {
   els.openPdf.disabled = !doc;
   if (!doc) {
     els.reviewTitle.textContent = "Select a document";
-    els.pdfStage.innerHTML = "<div class='paper-placeholder'><div></div><p>Select a document to read OCR text here, with the PDF viewer available for visual inspection.</p></div>";
+    els.pdfStage.innerHTML = "<div class='paper-placeholder'><div></div><p>Select a document to read it here.</p></div>";
     els.fieldList.innerHTML = "";
     els.categorySelect.value = "UNKNOWN";
     els.shortcutLabel.value = "";
@@ -235,8 +259,13 @@ function renderReview() {
   els.reviewTitle.textContent = vendorName(doc);
   const pdfHref = "/api/documents/" + encodeURIComponent(doc.document_id) + "/pdf";
   const billJson = doc.ocr_summary_json ? (function() { try { return JSON.parse(doc.ocr_summary_json); } catch(e) { return null; } })() : null;
-  els.pdfStage.innerHTML = "<article class='ocr-document'><header><div><p class='section-label'>Bill Summary</p><h3>" + escapeHtml(vendorName(doc)) + "</h3></div><a class='button button-primary' href='" + pdfHref + "' target='_blank' rel='noopener'>" + icon("external-link") + "Open PDF Viewer</a></header>" + renderBillSummary(billJson) + "</article>";
-  els.fieldList.innerHTML = field("Category", doc.category) + field("Shortcut Label", doc.shortcut_label) + field("Due Date", doc.due_date) + field("Amount", doc.amount) + field("Confidence", doc.confidence);
+  els.pdfStage.innerHTML = "<article class='ocr-document'><header><div><p class='section-label'>Bill Summary</p><h3>" + escapeHtml(vendorName(doc)) + "</h3></div><a class='button button-secondary' href='" + pdfHref + "' target='_blank' rel='noopener'>" + icon("external-link") + "Open PDF viewer</a></header>" + renderBillSummary(billJson) + "</article>";
+  els.fieldList.innerHTML = field("Document", doc.document_id, "mono") +
+    field("SHA-256", doc.sha256 ? String(doc.sha256).slice(0, 12) + "…" : "-", "mono") +
+    field("Batch", doc.batch_id, "mono") +
+    field("Category", doc.category) + field("Shortcut Label", doc.shortcut_label) + field("Due Date", doc.due_date) +
+    field("Amount", doc.amount, "mono") + field("Confidence", doc.confidence) +
+    (doc.review_reason ? field("Reason", doc.review_reason) : "");
   els.categorySelect.value = categories.includes(doc.category) ? doc.category : "UNKNOWN";
   els.shortcutLabel.value = text(doc.shortcut_label || doc.category, "");
   els.vendorInput.value = text(doc.vendor, "");
@@ -245,8 +274,8 @@ function renderReview() {
   els.clearDueDate.checked = false;
 }
 
-function field(label, value) {
-  return "<div><dt>" + escapeHtml(label) + "</dt><dd>" + escapeHtml(value) + "</dd></div>";
+function field(label, value, cls) {
+  return "<div><dt>" + escapeHtml(label) + "</dt><dd" + (cls ? " class='" + cls + "'" : "") + ">" + escapeHtml(value) + "</dd></div>";
 }
 
 function renderBillSummary(json) {
@@ -312,7 +341,7 @@ function renderBoard() {
     const label = status === "imported" ? "Imported" : status;
     return "<section class='board-column'><header><p class='section-label'>" + escapeHtml(label) + "</p><span class='mono muted'>" + docs.length + "</span></header>" +
       docs.map((doc) => "<button class='board-card " + (status === "Needs Review" ? "review" : status === "Actionable" ? "actionable" : "") + "' type='button' data-open-doc='" + escapeHtml(doc.document_id) + "'><strong>" + escapeHtml(vendorName(doc)) + "</strong><p>" + escapeHtml(doc.due_date ? ("Due " + doc.due_date) : (doc.review_reason || doc.ocr_summary || doc.document_id)) + "</p></button>").join("") +
-      (docs.length ? "" : "<p class='muted'>No documents.</p>") + "</section>";
+      (docs.length ? "" : "<p class='muted'>Nothing here.</p>") + "</section>";
   }).join("");
 }
 
@@ -320,6 +349,11 @@ function renderStatus() {
   const payload = state.statusPayload;
   if (!payload) return;
   els.statusTitle.textContent = payload.ok ? "Receiver online" : "Receiver unavailable";
+  if (els.pipelineChip) {
+    const schedule = payload.pipelineSchedule;
+    els.pipelineChip.hidden = false;
+    els.pipelineChip.textContent = schedule && schedule.enabled ? "Auto " + schedule.intervalMinutes + "m" : "Manual";
+  }
   const metrics = [
     ["Endpoint", payload.receiver ? payload.receiver.port : "-", payload.receiver ? payload.receiver.host : "-"],
     ["Token", payload.receiver && payload.receiver.tokenConfigured ? "set" : "missing", "Intake bearer token"],

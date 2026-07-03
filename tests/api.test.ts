@@ -173,10 +173,16 @@ describe("REST API", () => {
     expect(html.headers["content-type"]).toContain("text/html");
     expect(html.body).toContain("Mail Bills");
     expect(html.body).toContain("/ui/app.js");
+    // Review action wiring is present in the served markup.
+    expect(html.body).toContain('data-doc-action="send-to-paperless"');
     expect(html.body).toContain("Send to Paperless");
+    expect(html.body).toContain('data-run-pipeline="live"');
+    // Import-PDF form is present with the hooks app.js binds to.
     expect(html.body).toContain("Import PDF");
     expect(html.body).toContain("importPdfForm");
     expect(html.body).toContain("importPdfFile");
+    // Admin-token dialog replaces window.prompt but keeps the 401 retry flow.
+    expect(html.body).toContain('id="tokenDialog"');
     expect(js.statusCode).toBe(200);
     expect(js.body).toContain("/api/documents?limit=500");
     expect(js.body).toContain("/api/pipeline/process-pending");

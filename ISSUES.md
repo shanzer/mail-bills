@@ -17,7 +17,27 @@ Severity legend: **Critical** (exploitable / data-loss / process-crash), **High*
 - **L8 / L9** ✅ Moot — Notion adapter (`src/notion.ts`) and its `loadEnvFile` side effect were removed.
 - **Notion removal** also dropped `notionDatabaseName` (config/type), `notion_page_id` (ledger column/type), and the `notion.ts` env-file path.
 
-Remaining: H1-H3, H5-H6, M1-M5, M8-M12, L1-L7, L10-L14, plus the H4 rate-limiting gap and the test-coverage section.
+Remaining: H1-H3, H5-H6, M1-M5, M8-M11, L1-L7, L10-L14, plus the H4 rate-limiting gap and the test-coverage section.
+M12 is resolved as a *manual* purge action (issue #16); the scheduled expiry purge from the 2026-07-02 spec is tracked under the fixes PR.
+
+## GitHub issue mapping (verified 2026-07-03)
+
+All remaining findings are tracked as GitHub issues. Fix commits must
+reference the issue (`Fixes #N`). Mapping:
+
+| Finding | Issue | Finding | Issue | Finding | Issue |
+|---|---|---|---|---|---|
+| H1 | #1 | M3 | #9 | L4 | #20 |
+| H2 | #2 | M4 | #10 | L5 | #21 |
+| H3 | #3 | M5 | #11 | L6 | #22 |
+| H4 | #4 | M8 | #12 | L7 | #23 |
+| H5 | #5 | M9 | #13 | L10 | #24 |
+| H6 | #6 | M10 | #14 | L11 | #25 |
+| M1 | #7 | M11 | #15 | L12 | #26 |
+| M2 | #8 | M12 | #16 (closed: manual purge) | L13 | #27 |
+| — | — | L1 | #17 | L14 | #28 |
+| — | — | L2 | #18 | iOS scan-time OCR | #29 |
+| — | — | L3 | #19 | launchd deploy / UI redesign | #30 / #31 |
 
 ---
 

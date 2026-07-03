@@ -22,6 +22,24 @@ npm run start -- --host 0.0.0.0 --port 8765 --log-level debug
 `npm run start` runs the compiled `dist/src/cli.js`, so run `npm run build` after source changes.
 Use a phone-reachable host and port for pairing, such as `http://yoyodyne:8765`; `127.0.0.1` only works from the Mac itself.
 
+## Run as a boot service (launchd)
+
+```bash
+./deploy/install.sh                      # uses ./config.yaml
+./deploy/install.sh --config /path/to/config.yaml --port 8765
+./deploy/uninstall.sh                    # stop + remove (keeps data/logs)
+```
+
+`install.sh` builds the project, renders `deploy/com.mail-bills.api.plist.template`
+with this machine's node/repo/config paths, installs it as a user LaunchAgent
+(`RunAtLoad` + `KeepAlive`: starts at login, restarts on crash), and writes logs to
+`~/Library/Logs/mail-bills/` (rotated via `/etc/newsyslog.d/mail-bills.conf`,
+which needs sudo — the script prints manual instructions if it can't).
+
+Because it runs as a *user* agent, the service has your user context — required
+for Vision OCR, the `ollama` CLI, and iCloud folder access. It starts at login,
+not at system boot.
+
 ## Vision OCR Helper
 
 When `ocr.vision_fallback_enabled` is on, the Vision OCR fallback expects a compiled helper binary. By default the OCR runtime executes `dist/utils/vision_ocr`. Set `ocr.vision_helper_path` to override that location.

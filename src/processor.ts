@@ -78,6 +78,7 @@ export async function processBatch(input: {
   ledger.initialize();
   try {
     const services = input.services ?? defaultProcessorServices();
+    const duplicateSources = services.duplicateSourceLoader(ledger);
     const plannedDocuments = new Map<string, DocumentRecord>();
     const errors: Array<{ document_id: string; message: string }> = [];
     let processed = 0;
@@ -85,9 +86,10 @@ export async function processBatch(input: {
     for (const document of processableDocuments(ledger, input.batchId)) {
       const documentId = textValue(document.document_id);
       try {
-        const updated = await processDocument(document, { config: input.config, ledger, dryRun, services });
+        const updated = await processDocument(document, { config: input.config, ledger, dryRun, services, duplicateSources });
         processed += 1;
         plannedDocuments.set(documentId, updated);
+        duplicateSources.push(updated);
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         errors.push({ document_id: documentId, message });
@@ -113,7 +115,7 @@ export async function processBatch(input: {
 
 async function processDocument(
   document: DocumentRecord,
-  input: { config: MailBillsConfig; ledger: Ledger; dryRun: boolean; services: ProcessorServices }
+  input: { config: MailBillsConfig; ledger: Ledger; dryRun: boolean; services: ProcessorServices; duplicateSources: DocumentRecord[] }
 ): Promise<DocumentRecord> {
   const documentId = textValue(document.document_id);
   const ocrResult = await input.services.ocrProcessor({ documentId, ledger: input.ledger, ocrConfig: input.config.ocr, dryRun: input.dryRun });
@@ -123,7 +125,7 @@ async function processDocument(
     input.ledger.upsertDocument(current);
     current = input.ledger.getDocument(documentId) ?? current;
   }
-  const duplicateResult = input.services.duplicateDetector(current, input.services.duplicateSourceLoader(input.ledger));
+  const duplicateResult = input.services.duplicateDetector(current, input.duplicateSources);
   const duplicateUpdate = duplicateDocumentUpdate(documentId, duplicateResult);
   if (duplicateUpdate) {
     current = { ...current, ...duplicateUpdate };

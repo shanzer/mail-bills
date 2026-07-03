@@ -9,6 +9,7 @@ import { needsReviewDocuments, resolveReview } from "./review.js";
 import { applyDocumentAction } from "./actions.js";
 import { buildPairingPayload, ensureConfigToken, pairingPayloadJson, postSampleUpload, terminalQr, writeQrPng } from "./pairing.js";
 import { extractBillSummary } from "./summarizer.js";
+import { purgeExpiredQuarantine } from "./purge.js";
 
 async function main(argv: string[]): Promise<number> {
   const [command, ...rest] = argv;
@@ -128,6 +129,17 @@ async function main(argv: string[]): Promise<number> {
     console.log(`Done: ${ok} updated, ${failed} failed.`);
     return failed ? 1 : 0;
   }
+  if (command === "purge-quarantine") {
+    const ledger = new Ledger(configPaths(config).ledgerPath);
+    ledger.initialize();
+    try {
+      const result = purgeExpiredQuarantine({ ledger, config, dryRun: rest.includes("--dry-run") });
+      console.log(JSON.stringify(result, null, 2));
+      return result.errors.length ? 1 : 0;
+    } finally {
+      ledger.close();
+    }
+  }
   throw new Error(`unknown command: ${command}`);
 }
 
@@ -149,6 +161,7 @@ Commands:
   review resolve <documentId> --decision <decision>
   action <documentId> --action <action>
   backfill-summaries [--dry-run]
+  purge-quarantine [--dry-run]
   pairing [--write-token|--rotate-token] [--base-url <url>] [--qr] [--qr-png <path>] [--test-upload]
 `);
 }

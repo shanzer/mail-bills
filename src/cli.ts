@@ -114,9 +114,53 @@ async function main(argv: string[]): Promise<number> {
   }
   if (command === "backfill-summaries") {
     const dryRun = rest.includes("--dry-run");
+    const docId = option(rest, "--document");
+    const force = rest.includes("--force");
+
+    // Validate: --document must be followed by a non-flag argument.
+    if (rest.includes("--document") && (docId === undefined || docId.startsWith("--"))) {
+      process.stderr.write("--document requires a document ID.\n");
+      return 1;
+    }
+
+    // Validate: --force requires --document; fail fast before opening the ledger.
+    if (force && !docId) {
+      process.stderr.write("--force requires --document: use --force together with --document to regenerate a specific document's summary.\n");
+      return 1;
+    }
+
     const ledger = new Ledger(configPaths(config).ledgerPath);
     ledger.initialize();
     try {
+      if (docId) {
+        // Single-document mode.
+        const doc = ledger.getDocument(docId);
+        if (!doc) {
+          process.stderr.write(`Document ${docId} not found.\n`);
+          return 1;
+        }
+        if (!doc.ocr_text) {
+          process.stderr.write(`Document ${docId} has no OCR text.\n`);
+          return 1;
+        }
+        if (doc.ocr_summary_json && !force) {
+          console.log(`${docId} already has a summary; use --force to regenerate.`);
+          return 0;
+        }
+        process.stdout.write(`  ${docId} ... `);
+        const json = await extractBillSummary(doc.ocr_text).catch(() => null);
+        if (!json) {
+          process.stdout.write("failed\n");
+          return 1;
+        }
+        if (!dryRun) {
+          ledger.upsertDocument({ document_id: docId, ocr_summary_json: JSON.stringify(json) });
+        }
+        process.stdout.write(`ok (${Object.keys(json).filter((k) => (json as Record<string, unknown>)[k] !== undefined).length} fields)\n`);
+        console.log(`Done: 1 updated, 0 failed.${dryRun ? " (dry-run)" : ""}`);
+        return 0;
+      }
+
       const docs = ledger.documentsNeedingSummary();
       console.log(`Found ${docs.length} document(s) without a bill summary.${dryRun ? " (dry-run)" : ""}`);
       let ok = 0;
@@ -172,7 +216,7 @@ Commands:
   review list
   review resolve <documentId> --decision <decision>
   action <documentId> --action <action>
-  backfill-summaries [--dry-run]
+  backfill-summaries [--dry-run] [--document <id>] [--force]
   purge-quarantine [--dry-run]
   pairing [--write-token|--rotate-token] [--base-url <url>] [--qr] [--qr-png <path>] [--test-upload]
 `);

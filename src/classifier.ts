@@ -161,15 +161,48 @@ function detectVendor(text: string): string | undefined {
 }
 
 function extractAmount(text: string): string | undefined {
-  const patterns = [
-    /(?:amount due|amount you owe|premium amount due|balance due|total paid|total)\s*\$\s*([0-9][0-9,]*(?:\.[0-9]{2})?)/i,
-    /\$\s*([0-9][0-9,]*(?:\.[0-9]{2})?)/i
+  // Labeled patterns in PRIORITY order — a payment-demand label anywhere in
+  // the text beats a generic total appearing earlier (e.g. "Total $10.00 ...
+  // Amount Due $95.00" must yield 95.00). Within each label, the label and the
+  // dollar sign may be separated by up to 40 characters including newlines
+  // (e.g. "TOTAL $ THIS DELIVERY\n$804.06"). \b prevents matching "total"
+  // inside "Subtotal". (?!\.?\d) blocks partial matches of unit prices like
+  // $4.879 while allowing amounts followed by sentence punctuation.
+  const labeledPatterns = [
+    /\b(?:amount due|amount you owe|premium amount due|balance due)[\s\S]{0,40}?\$\s*([0-9][0-9,]*(?:\.[0-9]{2})?)(?!\.?\d)/i,
+    /\b(?:total paid|total)[\s\S]{0,40}?\$\s*([0-9][0-9,]*(?:\.[0-9]{2})?)(?!\.?\d)/i
   ];
-  for (const pattern of patterns) {
-    const match = text.match(pattern);
-    if (match) return match[1].replaceAll(",", "");
+  for (const labeledPattern of labeledPatterns) {
+    const labeledMatch = text.match(labeledPattern);
+    if (labeledMatch === null || labeledMatch.index === undefined) continue;
+    // Guard against unit prices: reject if the matched $ is immediately
+    // preceded by @ (e.g. "@ $4.879 per gallon").
+    const dollarPos = labeledMatch.index + labeledMatch[0].lastIndexOf("$");
+    const before = text.slice(Math.max(0, dollarPos - 6), dollarPos);
+    if (!before.includes("@")) {
+      return labeledMatch[1].replaceAll(",", "");
+    }
   }
-  return undefined;
+
+  // Fallback: scan ALL dollar amounts, exclude unit prices (@ within 6 chars
+  // before the $), exclude amounts with 3+ decimal places via (?!\.?\d), then
+  // return the LARGEST value found. (?!\.?\d) allows amounts followed by
+  // sentence punctuation like "$95.00." while still blocking $4.879.
+  const fallbackPattern = /\$\s*([0-9][0-9,]*(?:\.[0-9]{2})?)(?!\.?\d)/gi;
+  let largestValue: number | undefined;
+  let largestStr: string | undefined;
+  for (const match of text.matchAll(fallbackPattern)) {
+    if (match.index === undefined) continue;
+    const before = text.slice(Math.max(0, match.index - 6), match.index);
+    if (before.includes("@")) continue;
+    const str = match[1].replaceAll(",", "");
+    const value = parseFloat(str);
+    if (largestValue === undefined || value > largestValue) {
+      largestValue = value;
+      largestStr = str;
+    }
+  }
+  return largestStr;
 }
 
 function extractDueDate(text: string): string | undefined {

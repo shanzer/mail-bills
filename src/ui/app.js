@@ -51,6 +51,8 @@ const els = {
   importPdfLabel: document.getElementById("importPdfLabel"),
   importPdfNote: document.getElementById("importPdfNote"),
   pipelineChip: document.getElementById("pipelineChip"),
+  scheduleMenu: document.getElementById("scheduleMenu"),
+  scheduleMenuWrap: document.getElementById("scheduleMenuWrap"),
   docPager: document.getElementById("docPager"),
   pagerCount: document.getElementById("pagerCount"),
   pagerPrev: document.getElementById("pagerPrev"),
@@ -276,7 +278,7 @@ function renderReview() {
   els.reviewTitle.textContent = vendorName(doc);
   const pdfHref = "/api/documents/" + encodeURIComponent(doc.document_id) + "/pdf";
   const billJson = doc.ocr_summary_json ? (function() { try { return JSON.parse(doc.ocr_summary_json); } catch(e) { return null; } })() : null;
-  els.pdfStage.innerHTML = "<article class='ocr-document'><header><div><p class='section-label'>Bill Summary</p><h3>" + escapeHtml(vendorName(doc)) + "</h3></div><a class='button button-secondary' href='" + pdfHref + "' target='_blank' rel='noopener'>" + icon("external-link") + "Open PDF viewer</a></header>" + renderBillSummary(billJson) + "</article>";
+  els.pdfStage.innerHTML = "<article class='ocr-document'><header><div><p class='section-label'>Bill Summary</p><h3>" + escapeHtml(vendorName(doc)) + "</h3></div><a class='button button-secondary' href='" + pdfHref + "' target='_blank' rel='noopener'>" + icon("external-link") + "Open PDF viewer</a></header>" + renderBillSummary(billJson, doc.notes) + "</article>";
   els.fieldList.innerHTML = field("Document", doc.document_id, "mono") +
     field("SHA-256", doc.sha256 ? String(doc.sha256).slice(0, 12) + "…" : "-", "mono") +
     field("Batch", doc.batch_id, "mono") +
@@ -295,7 +297,7 @@ function field(label, value, cls) {
   return "<div><dt>" + escapeHtml(label) + "</dt><dd" + (cls ? " class='" + cls + "'" : "") + ">" + escapeHtml(value) + "</dd></div>";
 }
 
-function renderBillSummary(json) {
+function renderBillSummary(json, notes) {
   if (!json) {
     return "<p class='muted' style='padding:8px 0'>No bill summary yet. Run the pipeline to extract and analyze this document.</p>";
   }
@@ -346,6 +348,10 @@ function renderBillSummary(json) {
       html += "<li class='bill-method'>" + escapeHtml(m) + "</li>";
     });
     html += "</ul></div>";
+  }
+
+  if (notes) {
+    html += "<div class='bill-section'><p class='section-label'>Notes</p><p class='bill-notes'>" + escapeHtml(notes) + "</p></div>";
   }
 
   html += "</div>";
@@ -507,9 +513,80 @@ async function runPipeline(mode) {
   showView("status");
 }
 
+function openScheduleMenu() {
+  const menu = els.scheduleMenu;
+  if (!menu) return;
+  const schedule = state.statusPayload && state.statusPayload.pipelineSchedule;
+  menu.querySelectorAll("[data-schedule-preset]").forEach(function(btn) {
+    const value = btn.getAttribute("data-schedule-preset");
+    let active = false;
+    if (schedule) {
+      if (!schedule.enabled) {
+        active = value === "off";
+      } else {
+        active = value !== "off" && Number(value) === schedule.intervalMinutes;
+      }
+    }
+    btn.classList.toggle("is-active", active);
+  });
+  menu.hidden = false;
+  if (els.pipelineChip) els.pipelineChip.setAttribute("aria-expanded", "true");
+}
+
+function closeScheduleMenu() {
+  if (els.scheduleMenu) els.scheduleMenu.hidden = true;
+  if (els.pipelineChip) els.pipelineChip.setAttribute("aria-expanded", "false");
+}
+
+function toggleScheduleMenu() {
+  if (els.scheduleMenu && !els.scheduleMenu.hidden) {
+    closeScheduleMenu();
+  } else {
+    openScheduleMenu();
+  }
+}
+
+async function applySchedulePreset(preset) {
+  const body = preset === "off"
+    ? { enabled: false }
+    : { enabled: true, intervalMinutes: Number(preset) };
+  try {
+    const response = await api("/api/pipeline/schedule", {
+      method: "POST",
+      body: JSON.stringify(body)
+    });
+    const schedule = response.schedule;
+    if (els.pipelineChip) {
+      els.pipelineChip.textContent = schedule && schedule.enabled ? "Auto " + schedule.intervalMinutes + "m" : "Manual";
+    }
+    if (state.statusPayload) {
+      state.statusPayload.pipelineSchedule = schedule;
+    }
+    closeScheduleMenu();
+    toast(schedule && schedule.enabled ? "Auto-run set to every " + schedule.intervalMinutes + " min." : "Pipeline set to manual.");
+  } catch (error) {
+    toast(error.message);
+  }
+}
+
 document.addEventListener("click", async (event) => {
+  // Close the schedule menu when clicking outside its wrapper.
+  if (els.scheduleMenuWrap && !els.scheduleMenuWrap.contains(event.target)) {
+    closeScheduleMenu();
+  }
   const target = event.target.closest("button, a");
   if (!target) return;
+  // Schedule chip toggle opens/closes the preset menu.
+  if (target.id === "pipelineChip") {
+    toggleScheduleMenu();
+    return;
+  }
+  // Schedule preset selection — must return early to prevent fall-through.
+  const preset = target.getAttribute("data-schedule-preset");
+  if (preset !== null) {
+    await applySchedulePreset(preset);
+    return;
+  }
   const view = target.getAttribute("data-view-link");
   if (view) {
     event.preventDefault();

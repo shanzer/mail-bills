@@ -18,7 +18,17 @@
         <a href="#status" data-view-link="status">Status</a>
       </nav>
       <div class="header-actions">
-        <span class="chip chip-nav" id="pipelineChip" hidden></span>
+        <div class="chip-menu-wrap" id="scheduleMenuWrap">
+          <button class="chip chip-nav" type="button" id="pipelineChip" hidden aria-haspopup="true" aria-expanded="false"></button>
+          <div class="chip-menu" id="scheduleMenu" hidden>
+            <button type="button" data-schedule-preset="off">Off</button>
+            <button type="button" data-schedule-preset="30">Every 30m</button>
+            <button type="button" data-schedule-preset="60">Every 1h</button>
+            <button type="button" data-schedule-preset="120">Every 2h</button>
+            <button type="button" data-schedule-preset="180">Every 3h</button>
+            <button type="button" data-schedule-preset="360">Every 6h</button>
+          </div>
+        </div>
         <button class="button button-quiet" type="button" data-run-pipeline="dry">Dry run</button>
         <button class="button button-primary nav-cta" type="button" data-run-pipeline="live">Run pipeline</button>
       </div>

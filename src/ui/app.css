@@ -317,7 +317,23 @@ tr.is-selected td:first-child { border-left-color: var(--amber); }
 .chip-done { background: rgba(42, 122, 94, 0.14); color: var(--forest); }
 .chip-quiet { background: rgba(107, 122, 141, 0.14); color: var(--mid-gray); }
 .chip-error { background: var(--charcoal); color: var(--linen); }
-.chip-nav { border-color: rgba(255, 255, 255, 0.12); color: var(--light-on-dark); }
+.chip-nav { border-color: rgba(255, 255, 255, 0.12); color: var(--light-on-dark); background: transparent; cursor: pointer; }
+
+.chip-menu-wrap { position: relative; }
+.chip-menu {
+  position: absolute; top: calc(100% + 6px); right: 0; z-index: 30;
+  min-width: 140px; padding: 4px;
+  background: var(--charcoal); border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 4px;
+}
+.chip-menu button {
+  display: block; width: 100%; text-align: left;
+  padding: 6px 10px; border: 0; background: transparent;
+  color: var(--linen); font: inherit; font-size: 13px;
+  border-radius: 4px; cursor: pointer;
+}
+.chip-menu button:hover { background: rgba(245, 241, 235, 0.08); }
+.chip-menu button.is-active { color: var(--amber); }
 
 .empty-state {
   display: none;
@@ -447,6 +463,7 @@ tr.is-selected td:first-child { border-left-color: var(--amber); }
 .bill-info-fields dd { margin: 0; color: var(--charcoal); font-weight: 600; text-align: right; overflow-wrap: anywhere; }
 .bill-methods { display: flex; flex-wrap: wrap; gap: 6px; list-style: none; margin: 6px 0 0; padding: 0; }
 .bill-method { padding: 3px 10px; background: var(--charcoal); color: var(--light-on-dark); border-radius: 4px; font-size: 12px; }
+.bill-notes { margin: 0; white-space: pre-wrap; word-break: break-word; }
 .bill-section { display: grid; gap: 4px; }
 
 .inspector { display: grid; align-content: start; gap: 16px; }

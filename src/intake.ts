@@ -7,6 +7,9 @@ import { loadSidecar, SidecarValidationError } from "./sidecar.js";
 
 const SAFE_ID_RE = /^[A-Za-z0-9._-]+$/;
 
+// The %PDF header must appear near the start (spec allows leading junk up to 1024 bytes).
+const PDF_MAGIC = Buffer.from("%PDF");
+
 export class IntakeUploadError extends Error {
   constructor(message: string, readonly statusCode = 400) {
     super(message);
@@ -33,6 +36,10 @@ export function acceptUpload(input: {
 }): UploadResult {
   if (!input.pdfBytes.length) throw new IntakeUploadError("pdf is required");
   if (!input.sidecarBytes.length) throw new IntakeUploadError("sidecar is required");
+
+  if (!input.pdfBytes.subarray(0, 1024).includes(PDF_MAGIC)) {
+    throw new IntakeUploadError("pdf must be a PDF (missing %PDF header)");
+  }
 
   let raw: Record<string, unknown>;
   try {

@@ -21,7 +21,13 @@ describe("intake uploads", () => {
     const config = makeConfig(tempRoot("mail-bills-upload-"));
     acceptUpload({ pdfBytes: Buffer.from("%PDF upload\n"), sidecarBytes: sidecarBytes(), config });
 
-    expect(() => acceptUpload({ pdfBytes: Buffer.from("different"), sidecarBytes: sidecarBytes(), config })).toThrow(UploadCollisionError);
+    expect(() => acceptUpload({ pdfBytes: Buffer.from("%PDF different"), sidecarBytes: sidecarBytes(), config })).toThrow(UploadCollisionError);
     expect(() => acceptUpload({ pdfBytes: Buffer.from("%PDF upload\n"), sidecarBytes: sidecarBytes("../escape"), config })).toThrow(IntakeUploadError);
+  });
+
+  it("rejects uploads whose pdf bytes lack a %PDF header", () => {
+    const config = makeConfig(tempRoot("mail-bills-intake-magic-"));
+    expect(() => acceptUpload({ pdfBytes: Buffer.from("GIF89a not a pdf"), sidecarBytes: sidecarBytes("doc-magic"), config }))
+      .toThrow(/%PDF/);
   });
 });

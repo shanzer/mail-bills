@@ -184,11 +184,18 @@ describe("REST API", () => {
     // Admin-token dialog replaces window.prompt but keeps the 401 retry flow.
     expect(html.body).toContain('id="tokenDialog"');
     expect(js.statusCode).toBe(200);
-    expect(js.body).toContain("/api/documents?limit=500");
+    // Page size is 100, fetch uses limit= + PAGE_SIZE concatenation (not a 500 hardcode).
+    expect(js.body).toContain("PAGE_SIZE = 100");
+    expect(js.body).toContain("/api/documents?limit=");
+    expect(js.body).not.toContain("/api/documents?limit=500");
     expect(js.body).toContain("/api/pipeline/process-pending");
     expect(js.body).toContain("send-to-paperless");
     expect(js.body).toContain("/api/documents/import-pdf");
     expect(js.body).toContain("FormData");
+    // Pager markup must be served so pagination controls render.
+    expect(html.body).toContain('id="docPager"');
+    expect(html.body).toContain('id="pagerPrev"');
+    expect(html.body).toContain('id="pagerNext"');
     await app.close();
   });
 

@@ -3,6 +3,8 @@ const statuses = ["imported", "Inbox", "Needs Review", "Actionable", "Waiting", 
 const boardStatuses = ["Waiting", "imported", "Inbox", "Needs Review", "Actionable", "Completed"];
 const state = {
   documents: [],
+  total: 0,
+  offset: 0,
   status: "All",
   category: "All",
   query: "",
@@ -10,6 +12,7 @@ const state = {
   currentView: "console",
   statusPayload: null
 };
+const PAGE_SIZE = 100;
 
 const els = {
   filters: document.getElementById("statusFilters"),
@@ -48,6 +51,10 @@ const els = {
   importPdfLabel: document.getElementById("importPdfLabel"),
   importPdfNote: document.getElementById("importPdfNote"),
   pipelineChip: document.getElementById("pipelineChip"),
+  docPager: document.getElementById("docPager"),
+  pagerCount: document.getElementById("pagerCount"),
+  pagerPrev: document.getElementById("pagerPrev"),
+  pagerNext: document.getElementById("pagerNext"),
   tokenDialog: document.getElementById("tokenDialog"),
   tokenDialogMessage: document.getElementById("tokenDialogMessage"),
   tokenDialogInput: document.getElementById("tokenDialogInput"),
@@ -168,8 +175,9 @@ async function api(path, options = {}) {
 }
 
 async function loadDocuments() {
-  const body = await api("/api/documents?limit=500");
+  const body = await api("/api/documents?limit=" + PAGE_SIZE + "&offset=" + state.offset);
   state.documents = body.documents || [];
+  state.total = typeof body.total === "number" ? body.total : state.documents.length;
   if (!state.selectedId || !state.documents.some((doc) => doc.document_id === state.selectedId)) {
     const firstReview = state.documents.find((doc) => doc.status === "Needs Review");
     state.selectedId = firstReview ? firstReview.document_id : (state.documents[0] && state.documents[0].document_id) || null;
@@ -216,6 +224,15 @@ function renderTable() {
     "</tr>";
   }).join("");
   els.empty.classList.toggle("is-visible", docs.length === 0);
+}
+
+function renderPager() {
+  if (!els.docPager) return;
+  const from = state.total === 0 ? 0 : state.offset + 1;
+  const to = Math.min(state.offset + PAGE_SIZE, state.total);
+  els.pagerCount.textContent = "Showing " + from + "–" + to + " of " + state.total;
+  els.pagerPrev.disabled = state.offset <= 0;
+  els.pagerNext.disabled = state.offset + PAGE_SIZE >= state.total;
 }
 
 function selectedDocument() {
@@ -369,6 +386,7 @@ function renderStatus() {
 function renderAll() {
   renderFilters();
   renderTable();
+  renderPager();
   renderReview();
   renderBoard();
   renderStatus();
@@ -498,7 +516,18 @@ document.addEventListener("click", async (event) => {
   const status = target.getAttribute("data-status");
   if (status) {
     state.status = status;
-    renderAll();
+    state.offset = 0;
+    loadDocuments().catch((error) => toast(error.message));
+    return;
+  }
+  if (target.id === "pagerPrev" && state.offset > 0) {
+    state.offset = Math.max(0, state.offset - PAGE_SIZE);
+    loadDocuments().catch((error) => toast(error.message));
+    return;
+  }
+  if (target.id === "pagerNext" && state.offset + PAGE_SIZE < state.total) {
+    state.offset += PAGE_SIZE;
+    loadDocuments().catch((error) => toast(error.message));
     return;
   }
   const openId = target.getAttribute("data-open-doc") || target.getAttribute("data-select-review");
@@ -552,12 +581,14 @@ els.importPdfForm.addEventListener("submit", async (event) => {
 
 els.search.addEventListener("input", () => {
   state.query = els.search.value;
-  renderTable();
+  state.offset = 0;
+  loadDocuments().catch((error) => toast(error.message));
 });
 els.categoryFilter.addEventListener("change", () => {
   state.category = els.categoryFilter.value;
   if (state.status !== "All") state.status = "All";
-  renderAll();
+  state.offset = 0;
+  loadDocuments().catch((error) => toast(error.message));
 });
 els.refreshDocuments.addEventListener("click", () => loadDocuments().then(() => toast("Document list refreshed.")).catch((error) => toast(error.message)));
 els.refreshStatus.addEventListener("click", () => loadStatus().then(() => toast("Status refreshed.")).catch((error) => toast(error.message)));

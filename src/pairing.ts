@@ -125,6 +125,24 @@ export async function writeQrPng(payload: PairingPayload, outputPath: string): P
   return resolved;
 }
 
+/**
+ * Persist a partial pipeline-schedule patch to the YAML config file.
+ *
+ * Follows the same read-mutate-write pattern as {@link ensureConfigToken}.
+ * Calling code must mutate `config.pipelineSchedule` in place and call
+ * `scheduler.reconfigure()` after this returns so the running scheduler
+ * picks up the new values.
+ */
+export function updateConfigSchedule(configPath: string, patch: { intervalMinutes?: number; enabled?: boolean }): void {
+  const resolved = path.resolve(configPath);
+  const raw = readYaml(resolved);
+  raw.pipeline_schedule = raw.pipeline_schedule ?? {};
+  if (patch.intervalMinutes !== undefined) raw.pipeline_schedule.interval_minutes = patch.intervalMinutes;
+  if (patch.enabled !== undefined) raw.pipeline_schedule.enabled = patch.enabled;
+  fs.mkdirSync(path.dirname(resolved), { recursive: true });
+  fs.writeFileSync(resolved, YAML.stringify(raw, { sortMapEntries: false }));
+}
+
 export function ensureConfigToken(configPath: string, options: { rotate?: boolean } = {}): string {
   const resolved = path.resolve(configPath);
   const raw = readYaml(resolved);

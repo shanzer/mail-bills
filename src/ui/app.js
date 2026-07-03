@@ -51,6 +51,8 @@ const els = {
   importPdfLabel: document.getElementById("importPdfLabel"),
   importPdfNote: document.getElementById("importPdfNote"),
   pipelineChip: document.getElementById("pipelineChip"),
+  scheduleMenu: document.getElementById("scheduleMenu"),
+  scheduleMenuWrap: document.getElementById("scheduleMenuWrap"),
   docPager: document.getElementById("docPager"),
   pagerCount: document.getElementById("pagerCount"),
   pagerPrev: document.getElementById("pagerPrev"),
@@ -511,9 +513,80 @@ async function runPipeline(mode) {
   showView("status");
 }
 
+function openScheduleMenu() {
+  const menu = els.scheduleMenu;
+  if (!menu) return;
+  const schedule = state.statusPayload && state.statusPayload.pipelineSchedule;
+  menu.querySelectorAll("[data-schedule-preset]").forEach(function(btn) {
+    const value = btn.getAttribute("data-schedule-preset");
+    let active = false;
+    if (schedule) {
+      if (!schedule.enabled) {
+        active = value === "off";
+      } else {
+        active = value !== "off" && Number(value) === schedule.intervalMinutes;
+      }
+    }
+    btn.classList.toggle("is-active", active);
+  });
+  menu.hidden = false;
+  if (els.pipelineChip) els.pipelineChip.setAttribute("aria-expanded", "true");
+}
+
+function closeScheduleMenu() {
+  if (els.scheduleMenu) els.scheduleMenu.hidden = true;
+  if (els.pipelineChip) els.pipelineChip.setAttribute("aria-expanded", "false");
+}
+
+function toggleScheduleMenu() {
+  if (els.scheduleMenu && !els.scheduleMenu.hidden) {
+    closeScheduleMenu();
+  } else {
+    openScheduleMenu();
+  }
+}
+
+async function applySchedulePreset(preset) {
+  const body = preset === "off"
+    ? { enabled: false }
+    : { enabled: true, intervalMinutes: Number(preset) };
+  try {
+    const response = await api("/api/pipeline/schedule", {
+      method: "POST",
+      body: JSON.stringify(body)
+    });
+    const schedule = response.schedule;
+    if (els.pipelineChip) {
+      els.pipelineChip.textContent = schedule && schedule.enabled ? "Auto " + schedule.intervalMinutes + "m" : "Manual";
+    }
+    if (state.statusPayload) {
+      state.statusPayload.pipelineSchedule = schedule;
+    }
+    closeScheduleMenu();
+    toast(schedule && schedule.enabled ? "Auto-run set to every " + schedule.intervalMinutes + " min." : "Pipeline set to manual.");
+  } catch (error) {
+    toast(error.message);
+  }
+}
+
 document.addEventListener("click", async (event) => {
+  // Close the schedule menu when clicking outside its wrapper.
+  if (els.scheduleMenuWrap && !els.scheduleMenuWrap.contains(event.target)) {
+    closeScheduleMenu();
+  }
   const target = event.target.closest("button, a");
   if (!target) return;
+  // Schedule chip toggle opens/closes the preset menu.
+  if (target.id === "pipelineChip") {
+    toggleScheduleMenu();
+    return;
+  }
+  // Schedule preset selection — must return early to prevent fall-through.
+  const preset = target.getAttribute("data-schedule-preset");
+  if (preset !== null) {
+    await applySchedulePreset(preset);
+    return;
+  }
   const view = target.getAttribute("data-view-link");
   if (view) {
     event.preventDefault();

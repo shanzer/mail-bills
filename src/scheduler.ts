@@ -36,36 +36,29 @@ export class PipelineScheduler {
   constructor(private readonly config: MailBillsConfig, private readonly logger?: SchedulerLogger) {}
 
   start(): void {
-    if (!this.config.pipelineSchedule.enabled) {
-      this.logger?.info({ enabled: false }, "pipeline scheduler disabled");
-      return;
-    }
-    if (this.timer) {
-      this.logger?.debug({}, "pipeline scheduler already started");
-      return;
-    }
-    const intervalMs = this.intervalMs();
-    this.scheduleNext(intervalMs);
-    this.logger?.info({
-      intervalMinutes: this.config.pipelineSchedule.intervalMinutes,
-      runOnStartup: this.config.pipelineSchedule.runOnStartup,
-      nextRunAt: this.nextRunAt
-    }, "pipeline scheduler started");
-    this.timer = setInterval(() => {
-      this.scheduleNext(intervalMs);
-      // runNow logs and rethrows internally; swallow the rejection here so a
-      // failing scheduled run does not become an unhandled rejection that
-      // crashes the process.
+    const started = this.startTimer();
+    if (started && this.config.pipelineSchedule.runOnStartup) {
       void this.runNow().catch(() => undefined);
-    }, intervalMs);
-    this.timer.unref?.();
-    if (this.config.pipelineSchedule.runOnStartup) void this.runNow().catch(() => undefined);
+    }
   }
 
   stop(): void {
     if (this.timer) clearInterval(this.timer);
     this.timer = undefined;
     this.nextRunAt = undefined;
+  }
+
+  /**
+   * Re-read the (mutated) config: stop the current timer and start fresh.
+   *
+   * Callers must mutate `config.pipelineSchedule` before calling this.
+   * `stop()` first ensures the old interval is cleared even when re-enabling.
+   * `runOnStartup` is deliberately NOT honored here — it is intended to fire
+   * once at server boot, not on every config change via the API.
+   */
+  reconfigure(): void {
+    this.stop();
+    this.startTimer();
   }
 
   status(): PipelineSchedulerStatus {
@@ -135,6 +128,37 @@ export class PipelineScheduler {
         this.lastFinishedAt = new Date().toISOString();
       }
     });
+  }
+
+  /**
+   * Arms the interval timer. Returns true if the timer was newly started,
+   * false if the scheduler is disabled or already running.
+   */
+  private startTimer(): boolean {
+    if (!this.config.pipelineSchedule.enabled) {
+      this.logger?.info({ enabled: false }, "pipeline scheduler disabled");
+      return false;
+    }
+    if (this.timer) {
+      this.logger?.debug({}, "pipeline scheduler already started");
+      return false;
+    }
+    const intervalMs = this.intervalMs();
+    this.scheduleNext(intervalMs);
+    this.logger?.info({
+      intervalMinutes: this.config.pipelineSchedule.intervalMinutes,
+      runOnStartup: this.config.pipelineSchedule.runOnStartup,
+      nextRunAt: this.nextRunAt
+    }, "pipeline scheduler started");
+    this.timer = setInterval(() => {
+      this.scheduleNext(intervalMs);
+      // runNow logs and rethrows internally; swallow the rejection here so a
+      // failing scheduled run does not become an unhandled rejection that
+      // crashes the process.
+      void this.runNow().catch(() => undefined);
+    }, intervalMs);
+    this.timer.unref?.();
+    return true;
   }
 
   private intervalMs(): number {

@@ -196,6 +196,11 @@ describe("REST API", () => {
     expect(html.body).toContain('id="docPager"');
     expect(html.body).toContain('id="pagerPrev"');
     expect(html.body).toContain('id="pagerNext"');
+    // Schedule menu is present in the markup for the nav chip dropdown.
+    expect(html.body).toContain('id="scheduleMenu"');
+    expect(html.body).toContain('data-schedule-preset="360"');
+    // Schedule POST endpoint is wired up in app.js.
+    expect(js.body).toContain("/api/pipeline/schedule");
     await app.close();
   });
 
@@ -521,6 +526,131 @@ describe("REST API", () => {
 
     const paged = await app.inject({ method: "GET", url: "/api/documents?limit=2&offset=2" });
     expect(paged.json().documents).toHaveLength(1);
+    await app.close();
+  });
+});
+
+describe("pipeline schedule endpoint", () => {
+  it("persists intervalMinutes to YAML and returns updated schedule", async () => {
+    const config = makeConfig(tempRoot("mail-bills-sched-"));
+    const app = createApi(config);
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/pipeline/schedule",
+      payload: { intervalMinutes: 60 }
+    });
+
+    expect(response.statusCode).toBe(200);
+    const body = response.json();
+    expect(body.ok).toBe(true);
+    expect(body.schedule.intervalMinutes).toBe(60);
+    // Config file must have been created and contain the persisted key.
+    const yaml = fs.readFileSync(config.configPath!, "utf8");
+    expect(yaml).toContain("interval_minutes: 60");
+    await app.close();
+  });
+
+  it("rejects intervalMinutes below minimum (3 < 5)", async () => {
+    const app = createApi(makeConfig(tempRoot("mail-bills-sched-")));
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/pipeline/schedule",
+      payload: { intervalMinutes: 3 }
+    });
+    expect(response.statusCode).toBe(400);
+    expect(response.json().ok).toBe(false);
+    await app.close();
+  });
+
+  it("rejects body with neither intervalMinutes nor enabled", async () => {
+    const app = createApi(makeConfig(tempRoot("mail-bills-sched-")));
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/pipeline/schedule",
+      payload: {}
+    });
+    expect(response.statusCode).toBe(400);
+    expect(response.json().ok).toBe(false);
+    await app.close();
+  });
+
+  it("persists enabled=false and returns schedule with enabled false", async () => {
+    const config = makeConfig(tempRoot("mail-bills-sched-"));
+    const app = createApi(config);
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/pipeline/schedule",
+      payload: { enabled: false }
+    });
+
+    expect(response.statusCode).toBe(200);
+    const body = response.json();
+    expect(body.ok).toBe(true);
+    expect(body.schedule.enabled).toBe(false);
+    const yaml = fs.readFileSync(config.configPath!, "utf8");
+    expect(yaml).toContain("enabled: false");
+    await app.close();
+  });
+
+  it("rejects intervalMinutes above maximum (1441 > 1440)", async () => {
+    const app = createApi(makeConfig(tempRoot("mail-bills-sched-")));
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/pipeline/schedule",
+      payload: { intervalMinutes: 1441 }
+    });
+    expect(response.statusCode).toBe(400);
+    expect(response.json().ok).toBe(false);
+    await app.close();
+  });
+
+  it("rejects non-integer intervalMinutes (7.5)", async () => {
+    const app = createApi(makeConfig(tempRoot("mail-bills-sched-")));
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/pipeline/schedule",
+      payload: { intervalMinutes: 7.5 }
+    });
+    expect(response.statusCode).toBe(400);
+    expect(response.json().ok).toBe(false);
+    await app.close();
+  });
+
+  it("accepts the boundary maximum intervalMinutes (1440)", async () => {
+    const app = createApi(makeConfig(tempRoot("mail-bills-sched-")));
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/pipeline/schedule",
+      payload: { intervalMinutes: 1440 }
+    });
+    expect(response.statusCode).toBe(200);
+    expect(response.json().schedule.intervalMinutes).toBe(1440);
+    await app.close();
+  });
+
+  it("accepts the boundary minimum intervalMinutes (5)", async () => {
+    const app = createApi(makeConfig(tempRoot("mail-bills-sched-")));
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/pipeline/schedule",
+      payload: { intervalMinutes: 5 }
+    });
+    expect(response.statusCode).toBe(200);
+    expect(response.json().schedule.intervalMinutes).toBe(5);
+    await app.close();
+  });
+
+  it("rejects non-boolean enabled", async () => {
+    const app = createApi(makeConfig(tempRoot("mail-bills-sched-")));
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/pipeline/schedule",
+      payload: { enabled: "true" }
+    });
+    expect(response.statusCode).toBe(400);
+    expect(response.json().ok).toBe(false);
     await app.close();
   });
 });

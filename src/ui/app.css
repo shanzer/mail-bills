@@ -317,7 +317,23 @@ tr.is-selected td:first-child { border-left-color: var(--amber); }
 .chip-done { background: rgba(42, 122, 94, 0.14); color: var(--forest); }
 .chip-quiet { background: rgba(107, 122, 141, 0.14); color: var(--mid-gray); }
 .chip-error { background: var(--charcoal); color: var(--linen); }
-.chip-nav { border-color: rgba(255, 255, 255, 0.12); color: var(--light-on-dark); }
+.chip-nav { border-color: rgba(255, 255, 255, 0.12); color: var(--light-on-dark); background: transparent; cursor: pointer; }
+
+.chip-menu-wrap { position: relative; }
+.chip-menu {
+  position: absolute; top: calc(100% + 6px); right: 0; z-index: 30;
+  min-width: 140px; padding: 4px;
+  background: var(--charcoal); border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 4px;
+}
+.chip-menu button {
+  display: block; width: 100%; text-align: left;
+  padding: 6px 10px; border: 0; background: transparent;
+  color: var(--linen); font: inherit; font-size: 13px;
+  border-radius: 4px; cursor: pointer;
+}
+.chip-menu button:hover { background: rgba(245, 241, 235, 0.08); }
+.chip-menu button.is-active { color: var(--amber); }
 
 .empty-state {
   display: none;

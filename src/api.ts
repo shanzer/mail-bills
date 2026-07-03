@@ -13,7 +13,7 @@ import { applyDocumentAction } from "./actions.js";
 import { bootstrapDirectories } from "./bootstrap.js";
 import { uiAssets } from "./ui.js";
 import { PipelineScheduler } from "./scheduler.js";
-import { buildPairingPayload, ensureConfigToken, svgQr, validatePairingBaseUrl } from "./pairing.js";
+import { buildPairingPayload, ensureConfigToken, svgQr, updateConfigSchedule, validatePairingBaseUrl } from "./pairing.js";
 import { FailedAuthLimiter } from "./rate-limit.js";
 
 /** Per-file multipart cap; the whole-request cap must fit both files + form overhead. */
@@ -199,6 +199,42 @@ export function createApi(config: MailBillsConfig): FastifyInstance {
     ok: true,
     schedule: scheduler.status()
   }));
+
+  app.post("/api/pipeline/schedule", { preHandler: requireAdmin(config, adminLimiter) }, async (request, reply) => {
+    if (!config.configPath) {
+      return reply.code(400).send({ ok: false, error: "configPath is required to persist the schedule" });
+    }
+    const body = (request.body ?? {}) as Record<string, any>;
+    const hasIntervalMinutes = Object.prototype.hasOwnProperty.call(body, "intervalMinutes");
+    const hasEnabled = Object.prototype.hasOwnProperty.call(body, "enabled");
+    if (!hasIntervalMinutes && !hasEnabled) {
+      return reply.code(400).send({ ok: false, error: "at least one of intervalMinutes or enabled must be provided" });
+    }
+    let intervalMinutes: number | undefined;
+    if (hasIntervalMinutes) {
+      const parsed = Number(body.intervalMinutes);
+      if (!Number.isInteger(parsed) || parsed < 5 || parsed > 1440) {
+        return reply.code(400).send({ ok: false, error: "intervalMinutes must be an integer between 5 and 1440" });
+      }
+      intervalMinutes = parsed;
+    }
+    let enabled: boolean | undefined;
+    if (hasEnabled) {
+      if (typeof body.enabled !== "boolean") {
+        return reply.code(400).send({ ok: false, error: "enabled must be a boolean (true or false)" });
+      }
+      enabled = body.enabled;
+    }
+    try {
+      updateConfigSchedule(config.configPath, { intervalMinutes, enabled });
+      if (intervalMinutes !== undefined) config.pipelineSchedule.intervalMinutes = intervalMinutes;
+      if (enabled !== undefined) config.pipelineSchedule.enabled = enabled;
+      scheduler.reconfigure();
+      return reply.send({ ok: true, schedule: scheduler.status() });
+    } catch (error) {
+      return reply.code(500).send({ ok: false, error: error instanceof Error ? error.message : String(error) });
+    }
+  });
 
   app.get("/api/pairing/qr", { preHandler: requireAdmin(config, adminLimiter) }, async (request, reply) => {
     try {

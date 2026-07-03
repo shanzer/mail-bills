@@ -12,7 +12,7 @@ import { extractBillSummary } from "./summarizer.js";
 
 async function main(argv: string[]): Promise<number> {
   const [command, ...rest] = argv;
-  const configPath = option(rest, "--config") ?? "../mail-bills/config.yaml";
+  const configPath = option(rest, "--config") ?? "config.yaml";
   const config = loadConfig(configPath);
 
   if (!command || command === "help") {

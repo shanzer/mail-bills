@@ -1,4 +1,4 @@
-root_dir: /Users/buckaroo/.hermes/projects/mail-bills
+root_dir: ~/data/mail-bills
 icloud_intake_dir:
 icloud_error_dir:
 # Optional shared bearer token guarding all management/pipeline/pairing
@@ -14,8 +14,8 @@ pipeline_schedule:
 intake_upload:
   host: 0.0.0.0
   port: 8765
-  intake_dir: /Users/buckaroo/.hermes/projects/mail-bills/intake/uploaded
-  error_dir: /Users/buckaroo/.hermes/projects/mail-bills/intake/upload-error
+  intake_dir: ~/data/mail-bills/intake/uploaded
+  error_dir: ~/data/mail-bills/intake/upload-error
   token:
 ocr:
   local_first: true

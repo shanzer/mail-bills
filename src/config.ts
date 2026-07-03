@@ -4,7 +4,7 @@ import YAML from "yaml";
 import { expandUser, optionalText, ownerHomeFromConfigPath } from "./paths.js";
 import type { MailBillsConfig } from "./types.js";
 
-const DEFAULT_ROOT = "/Users/buckaroo/.hermes/projects/mail-bills";
+const DEFAULT_ROOT = "~/data/mail-bills";
 const LOG_LEVELS = new Set(["silent", "fatal", "error", "warn", "info", "debug", "trace"]);
 type RawConfig = Record<string, any>;
 

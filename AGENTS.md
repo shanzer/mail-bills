@@ -21,7 +21,7 @@ This repository is a TypeScript/Node.js rewrite of the Mail Bills physical-mail 
 - `npm test` runs the Vitest suite.
 - `npm run build` compiles TypeScript into `dist/`.
 - `npm run start -- --host 127.0.0.1 --port 8788` starts the compiled REST API.
-- `npm run mail-bills -- pairing --config ../mail-bills/config.yaml --base-url http://yoyodyne:8765 --qr` generates iPhone pairing output.
+- `npm run mail-bills -- pairing --config config.yaml --base-url http://yoyodyne:8765 --qr` generates iPhone pairing output.
 
 Run `npm run build` before using `npm run start` or `npm run mail-bills`, because those commands execute `dist/src/cli.js`.
 

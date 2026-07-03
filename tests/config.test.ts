@@ -28,4 +28,10 @@ describe("config", () => {
 
     expect(config.logging.level).toBe("info");
   });
+
+  it("defaults root_dir under the invoking user's home, not a hardcoded user", () => {
+    const config = loadConfig(path.join(tempRoot("mail-bills-config-"), "missing.yaml"));
+    expect(config.rootDir).not.toContain("buckaroo");
+    expect(config.rootDir).toContain("data/mail-bills");
+  });
 });

@@ -147,7 +147,26 @@ export class Ledger {
         "created_at TEXT",
         "imported_at TEXT"
       ]) {
-        try { db.exec(`ALTER TABLE documents ADD COLUMN ${col}`); } catch { /* column exists */ }
+        try {
+          db.exec(`ALTER TABLE documents ADD COLUMN ${col}`);
+        } catch (error) {
+          // Only "duplicate column name" is expected; anything else must not be
+          // silently swallowed or we could stamp user_version with a partial schema.
+          if (!(error instanceof Error) || !error.message.includes("duplicate column name")) throw error;
+        }
+      }
+      for (const col of [
+        "document_id TEXT",
+        "batch_id TEXT",
+        "payload_json TEXT"
+      ]) {
+        try {
+          db.exec(`ALTER TABLE events ADD COLUMN ${col}`);
+        } catch (error) {
+          // Only "duplicate column name" is expected; anything else must not be
+          // silently swallowed or we could stamp user_version with a partial schema.
+          if (!(error instanceof Error) || !error.message.includes("duplicate column name")) throw error;
+        }
       }
       db.exec(`
         CREATE INDEX IF NOT EXISTS idx_documents_status ON documents(status);

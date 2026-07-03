@@ -73,6 +73,8 @@ describe("ledger schema migration", () => {
     ledger.initialize();
     ledger.upsertDocument({ document_id: "d1", status: "imported", notes: "migrated", ocr_summary_json: "{}" });
     expect(ledger.getDocument("d1")?.notes).toBe("migrated");
+    const eventId = ledger.appendEvent({ documentId: "d1", eventType: "migrated_event" });
+    expect(eventId).toBeGreaterThan(0);
     ledger.close();
   });
 });

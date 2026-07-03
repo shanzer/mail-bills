@@ -29,15 +29,27 @@ export function purgeExpiredQuarantine(input: {
   const todayIso = (input.today ?? new Date()).toISOString().slice(0, 10);
   const quarantineDir = configPaths(input.config).quarantineDir;
   const result: PurgeResult = { dryRun, purged: [], errors: [] };
-  const expired = input.ledger.documentsByStatus("Deleted").filter((document) =>
-    textValue(document.retention_decision) === "Quarantined" &&
-    Boolean(textValue(document.quarantined_until)) &&
-    (textValue(document.quarantined_until) as string) < todayIso
-  );
+  const expired = input.ledger.documentsByStatus("Deleted").filter((document) => {
+    const retention = textValue(document.retention_decision);
+    const until = textValue(document.quarantined_until);
+    return (
+      retention === "Quarantined" &&
+      Boolean(until) &&
+      /^\d{4}-\d{2}-\d{2}/.test(until as string) &&
+      (until as string).slice(0, 10) < todayIso
+    );
+  });
   for (const document of expired) {
     const documentId = textValue(document.document_id);
     try {
-      const removedFiles = removeQuarantinedFiles(document, quarantineDir, dryRun);
+      const { removed: removedFiles, outside } = removeQuarantinedFiles(document, quarantineDir, dryRun);
+      if (outside.length > 0) {
+        result.errors.push({
+          document_id: documentId,
+          message: `path outside quarantine left untouched: ${outside.join(", ")}`
+        });
+        continue;
+      }
       if (!dryRun) {
         input.ledger.upsertDocument({
           document_id: documentId,
@@ -64,8 +76,13 @@ export function purgeExpiredQuarantine(input: {
   return result;
 }
 
-function removeQuarantinedFiles(document: DocumentRecord, quarantineDir: string, dryRun: boolean): string[] {
+function removeQuarantinedFiles(
+  document: DocumentRecord,
+  quarantineDir: string,
+  dryRun: boolean
+): { removed: string[]; outside: string[] } {
   const removed: string[] = [];
+  const outside: string[] = [];
   for (const field of ["local_pdf_path", "sidecar_path"] as const) {
     const candidate = textValue(document[field]);
     if (!candidate) continue;
@@ -73,11 +90,16 @@ function removeQuarantinedFiles(document: DocumentRecord, quarantineDir: string,
     try {
       resolved = ensureUnder(quarantineDir, candidate);
     } catch {
-      continue; // path was never moved under quarantine; do not touch it
+      // Path is not inside the quarantine directory; record it so the caller
+      // can skip ledger finalization entirely (case 3).
+      outside.push(candidate);
+      continue;
     }
+    // Case 2: file already gone — self-heal, still finalize the row.
     if (!fs.existsSync(resolved)) continue;
+    // Case 1: file present inside quarantine dir — delete it.
     if (!dryRun) fs.unlinkSync(resolved);
     removed.push(resolved);
   }
-  return removed;
+  return { removed, outside };
 }

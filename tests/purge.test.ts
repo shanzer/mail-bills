@@ -69,8 +69,52 @@ describe("quarantine purge", () => {
       quarantined_until: "2026-06-08", local_pdf_path: outsidePath
     });
     const result = purgeExpiredQuarantine({ ledger, config, today: new Date("2026-07-01") });
+    // File outside quarantine dir must remain untouched.
     expect(fs.existsSync(outsidePath)).toBe(true);
-    expect(result.purged[0]?.removedFiles ?? []).toHaveLength(0);
+    // Ledger row must NOT be finalized — retention_decision and path columns intact.
+    expect(ledger.getDocument("doc-esc")?.retention_decision).toBe("Quarantined");
+    expect(ledger.getDocument("doc-esc")?.local_pdf_path).toBeTruthy();
+    // Error recorded for the escaped path; doc-esc must not appear in purged.
+    expect(result.errors).toHaveLength(1);
+    expect(result.errors[0]?.document_id).toBe("doc-esc");
+    expect(result.purged.find((p) => p.documentId === "doc-esc")).toBeUndefined();
+    ledger.close();
+  });
+
+  it("skips docs with non-ISO quarantined_until and purges docs with ISO timestamp prefix", () => {
+    const root = tempRoot("purge-date-fmt-");
+    const config = makeConfig(root);
+    const quarantineDir = configPaths(config).quarantineDir;
+    const ledger = new Ledger(configPaths(config).ledgerPath);
+    ledger.initialize();
+
+    // "garbage" value — must be skipped entirely (no purge, no error).
+    ledger.upsertDocument({
+      document_id: "doc-garbage", status: "Deleted", retention_decision: "Quarantined",
+      quarantined_until: "garbage"
+    });
+
+    // Full ISO 8601 timestamp — slice(0,10) gives "2026-06-08" which is < today, so must purge.
+    const pdfPath = path.join(quarantineDir, "2026-06-08", "doc-ts", "doc-ts.pdf");
+    fs.mkdirSync(path.dirname(pdfPath), { recursive: true });
+    fs.writeFileSync(pdfPath, "%PDF quarantined");
+    ledger.upsertDocument({
+      document_id: "doc-ts", status: "Deleted", retention_decision: "Quarantined",
+      quarantined_until: "2026-06-08T00:00:00.000Z", local_pdf_path: pdfPath
+    });
+
+    const result = purgeExpiredQuarantine({ ledger, config, today: new Date("2026-07-01") });
+
+    // "garbage" skipped — still quarantined, absent from both purged and errors.
+    expect(ledger.getDocument("doc-garbage")?.retention_decision).toBe("Quarantined");
+    expect(result.purged.find((p) => p.documentId === "doc-garbage")).toBeUndefined();
+    expect(result.errors.find((e) => e.document_id === "doc-garbage")).toBeUndefined();
+
+    // Full timestamp accepted — file deleted, row finalized as Purged.
+    expect(fs.existsSync(pdfPath)).toBe(false);
+    expect(ledger.getDocument("doc-ts")?.retention_decision).toBe("Purged");
+    expect(result.purged.find((p) => p.documentId === "doc-ts")).toBeDefined();
+
     ledger.close();
   });
 });

@@ -276,7 +276,7 @@ function renderReview() {
   els.reviewTitle.textContent = vendorName(doc);
   const pdfHref = "/api/documents/" + encodeURIComponent(doc.document_id) + "/pdf";
   const billJson = doc.ocr_summary_json ? (function() { try { return JSON.parse(doc.ocr_summary_json); } catch(e) { return null; } })() : null;
-  els.pdfStage.innerHTML = "<article class='ocr-document'><header><div><p class='section-label'>Bill Summary</p><h3>" + escapeHtml(vendorName(doc)) + "</h3></div><a class='button button-secondary' href='" + pdfHref + "' target='_blank' rel='noopener'>" + icon("external-link") + "Open PDF viewer</a></header>" + renderBillSummary(billJson) + "</article>";
+  els.pdfStage.innerHTML = "<article class='ocr-document'><header><div><p class='section-label'>Bill Summary</p><h3>" + escapeHtml(vendorName(doc)) + "</h3></div><a class='button button-secondary' href='" + pdfHref + "' target='_blank' rel='noopener'>" + icon("external-link") + "Open PDF viewer</a></header>" + renderBillSummary(billJson, doc.notes) + "</article>";
   els.fieldList.innerHTML = field("Document", doc.document_id, "mono") +
     field("SHA-256", doc.sha256 ? String(doc.sha256).slice(0, 12) + "…" : "-", "mono") +
     field("Batch", doc.batch_id, "mono") +
@@ -295,7 +295,7 @@ function field(label, value, cls) {
   return "<div><dt>" + escapeHtml(label) + "</dt><dd" + (cls ? " class='" + cls + "'" : "") + ">" + escapeHtml(value) + "</dd></div>";
 }
 
-function renderBillSummary(json) {
+function renderBillSummary(json, notes) {
   if (!json) {
     return "<p class='muted' style='padding:8px 0'>No bill summary yet. Run the pipeline to extract and analyze this document.</p>";
   }
@@ -346,6 +346,10 @@ function renderBillSummary(json) {
       html += "<li class='bill-method'>" + escapeHtml(m) + "</li>";
     });
     html += "</ul></div>";
+  }
+
+  if (notes) {
+    html += "<div class='bill-section'><p class='section-label'>Notes</p><p class='bill-notes'>" + escapeHtml(notes) + "</p></div>";
   }
 
   html += "</div>";

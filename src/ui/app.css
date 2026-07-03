@@ -447,6 +447,7 @@ tr.is-selected td:first-child { border-left-color: var(--amber); }
 .bill-info-fields dd { margin: 0; color: var(--charcoal); font-weight: 600; text-align: right; overflow-wrap: anywhere; }
 .bill-methods { display: flex; flex-wrap: wrap; gap: 6px; list-style: none; margin: 6px 0 0; padding: 0; }
 .bill-method { padding: 3px 10px; background: var(--charcoal); color: var(--light-on-dark); border-radius: 4px; font-size: 12px; }
+.bill-notes { margin: 0; white-space: pre-wrap; word-break: break-word; }
 .bill-section { display: grid; gap: 4px; }
 
 .inspector { display: grid; align-content: start; gap: 16px; }

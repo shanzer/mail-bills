@@ -3,15 +3,22 @@ import { uiJs, uiHtml, uiCss } from "../src/ui.js";
 
 describe("bill summary display", () => {
   it("renders structured JSON summary instead of raw OCR text", () => {
-    expect(uiJs).toContain("renderBillSummary(billJson)");
+    expect(uiJs).toContain("renderBillSummary(billJson, doc.notes)");
     expect(uiJs).toContain("ocr_summary_json");
     expect(uiJs).toContain("Bill Summary");
     expect(uiJs).not.toContain("OCR Text");
   });
 
   it("renderBillSummary handles null input gracefully", () => {
-    expect(uiJs).toContain("function renderBillSummary(json)");
+    expect(uiJs).toContain("function renderBillSummary(json, notes)");
     expect(uiJs).toContain("No bill summary yet");
+  });
+
+  it("renderBillSummary shows notes in the summary card when present", () => {
+    expect(uiJs).toContain("bill-notes");
+    expect(uiJs).toContain("section-label'>Notes");
+    // Notes block must be conditional (falsy guard)
+    expect(uiJs).toContain("notes");
   });
 
   it("renderBillSummary renders amount cards with highlight class", () => {
@@ -46,6 +53,10 @@ describe("vendor and notes editing", () => {
   it("sends vendor and notes in update-fields and actionable actions", () => {
     expect(uiJs).toContain("body.vendor = els.vendorInput.value");
     expect(uiJs).toContain("body.notes = els.notesInput.value");
+  });
+
+  it("passes document notes into the Bill Summary card", () => {
+    expect(uiJs).toContain("renderBillSummary(billJson, doc.notes)");
   });
 });
 

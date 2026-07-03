@@ -3,6 +3,8 @@ import path from "node:path";
 import Database from "better-sqlite3";
 import type { BatchRecord, DocumentRecord } from "./types.js";
 
+export const SCHEMA_VERSION = 2;
+
 const BATCH_COLUMNS = new Set([
   "batch_id",
   "created_at",
@@ -42,67 +44,136 @@ const DOCUMENT_COLUMNS = new Set([
 ]);
 
 export class Ledger {
+  private db?: Database.Database;
+
   constructor(readonly filePath: string) {}
 
+  /** Lazily opened, long-lived connection. Call close() when done with the instance. */
+  private connection(): Database.Database {
+    if (!this.db) {
+      fs.mkdirSync(path.dirname(this.filePath), { recursive: true });
+      this.db = new Database(this.filePath);
+    }
+    return this.db;
+  }
+
+  close(): void {
+    this.db?.close();
+    this.db = undefined;
+  }
+
+  /** Run fn atomically. better-sqlite3 nests via savepoints, so nested calls are safe. */
+  transaction<T>(fn: () => T): T {
+    return this.connection().transaction(fn)();
+  }
+
   initialize(): void {
-    fs.mkdirSync(path.dirname(this.filePath), { recursive: true });
-    const db = this.connect();
-    try {
-      db.exec(`
-        CREATE TABLE IF NOT EXISTS batches (
-          batch_id TEXT PRIMARY KEY,
-          created_at TEXT,
-          source TEXT DEFAULT 'iphone_shortcut',
-          status TEXT,
-          item_count INTEGER
-        );
+    const db = this.connection();
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS batches (
+        batch_id TEXT PRIMARY KEY,
+        created_at TEXT,
+        source TEXT DEFAULT 'iphone_shortcut',
+        status TEXT,
+        item_count INTEGER
+      );
 
-        CREATE TABLE IF NOT EXISTS documents (
-          document_id TEXT PRIMARY KEY,
-          batch_id TEXT,
-          source_pdf_path TEXT,
-          local_pdf_path TEXT,
-          sidecar_path TEXT,
-          sha256 TEXT,
-          created_at TEXT,
-          imported_at TEXT,
-          status TEXT,
-          category TEXT,
-          shortcut_label TEXT,
-          detected_category TEXT,
-          vendor TEXT,
-          amount TEXT,
-          due_date TEXT,
-          ocr_text TEXT,
-          ocr_summary TEXT,
-          ocr_summary_json TEXT,
-          confidence TEXT,
-          review_reason TEXT,
-          urgency_reasons_json TEXT,
-          retention_decision TEXT,
-          quarantined_until TEXT,
-          duplicate_of_document_id TEXT,
-          deleted_at TEXT,
-          error_message TEXT,
-          notes TEXT,
-          FOREIGN KEY(batch_id) REFERENCES batches(batch_id)
-        );
+      CREATE TABLE IF NOT EXISTS documents (
+        document_id TEXT PRIMARY KEY,
+        batch_id TEXT,
+        source_pdf_path TEXT,
+        local_pdf_path TEXT,
+        sidecar_path TEXT,
+        sha256 TEXT,
+        created_at TEXT,
+        imported_at TEXT,
+        status TEXT,
+        category TEXT,
+        shortcut_label TEXT,
+        detected_category TEXT,
+        vendor TEXT,
+        amount TEXT,
+        due_date TEXT,
+        ocr_text TEXT,
+        ocr_summary TEXT,
+        ocr_summary_json TEXT,
+        confidence TEXT,
+        review_reason TEXT,
+        urgency_reasons_json TEXT,
+        retention_decision TEXT,
+        quarantined_until TEXT,
+        duplicate_of_document_id TEXT,
+        deleted_at TEXT,
+        error_message TEXT,
+        notes TEXT,
+        FOREIGN KEY(batch_id) REFERENCES batches(batch_id)
+      );
 
-        CREATE TABLE IF NOT EXISTS events (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          document_id TEXT,
-          batch_id TEXT,
-          event_type TEXT NOT NULL,
-          event_at TEXT NOT NULL,
-          payload_json TEXT
-        );
-      `);
-      // Migrate existing databases that predate added columns.
-      for (const col of ["ocr_summary_json TEXT", "notes TEXT"]) {
-        try { db.exec(`ALTER TABLE documents ADD COLUMN ${col}`); } catch { /* already exists */ }
+      CREATE TABLE IF NOT EXISTS events (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        document_id TEXT,
+        batch_id TEXT,
+        event_type TEXT NOT NULL,
+        event_at TEXT NOT NULL,
+        payload_json TEXT
+      );
+    `);
+    const version = Number(db.pragma("user_version", { simple: true }));
+    if (version < SCHEMA_VERSION) {
+      // Additive migrations for ledgers created by older schemas (incl. the Python era).
+      for (const col of [
+        "ocr_summary_json TEXT",
+        "notes TEXT",
+        "ocr_text TEXT",
+        "ocr_summary TEXT",
+        "confidence TEXT",
+        "review_reason TEXT",
+        "urgency_reasons_json TEXT",
+        "retention_decision TEXT",
+        "quarantined_until TEXT",
+        "duplicate_of_document_id TEXT",
+        "deleted_at TEXT",
+        "error_message TEXT",
+        "due_date TEXT",
+        "category TEXT",
+        "shortcut_label TEXT",
+        "detected_category TEXT",
+        "vendor TEXT",
+        "amount TEXT",
+        "source_pdf_path TEXT",
+        "local_pdf_path TEXT",
+        "sidecar_path TEXT",
+        "sha256 TEXT",
+        "created_at TEXT",
+        "imported_at TEXT"
+      ]) {
+        try {
+          db.exec(`ALTER TABLE documents ADD COLUMN ${col}`);
+        } catch (error) {
+          // Only "duplicate column name" is expected; anything else must not be
+          // silently swallowed or we could stamp user_version with a partial schema.
+          if (!(error instanceof Error) || !error.message.includes("duplicate column name")) throw error;
+        }
       }
-    } finally {
-      db.close();
+      for (const col of [
+        "document_id TEXT",
+        "batch_id TEXT",
+        "payload_json TEXT"
+      ]) {
+        try {
+          db.exec(`ALTER TABLE events ADD COLUMN ${col}`);
+        } catch (error) {
+          // Only "duplicate column name" is expected; anything else must not be
+          // silently swallowed or we could stamp user_version with a partial schema.
+          if (!(error instanceof Error) || !error.message.includes("duplicate column name")) throw error;
+        }
+      }
+      db.exec(`
+        CREATE INDEX IF NOT EXISTS idx_documents_status ON documents(status);
+        CREATE INDEX IF NOT EXISTS idx_documents_batch_id ON documents(batch_id);
+        CREATE INDEX IF NOT EXISTS idx_documents_due_date ON documents(due_date);
+      `);
+      db.pragma(`user_version = ${SCHEMA_VERSION}`);
     }
   }
 
@@ -137,6 +208,22 @@ export class Ledger {
   }
 
   listDocuments(options: { status?: string; q?: string; limit?: number; offset?: number } = {}): DocumentRecord[] {
+    const { where, params } = this.documentFilters(options);
+    const paginationParams = [options.limit ?? 200, options.offset ?? 0];
+    return this.fetchAll<DocumentRecord>(
+      `SELECT * FROM documents ${where} ORDER BY due_date IS NULL, due_date, document_id LIMIT ? OFFSET ?`,
+      ...params,
+      ...paginationParams
+    );
+  }
+
+  countDocuments(options: { status?: string; q?: string } = {}): number {
+    const { where, params } = this.documentFilters(options);
+    const row = this.fetchOne<{ count: number }>(`SELECT COUNT(*) AS count FROM documents ${where}`, ...params);
+    return Number(row?.count ?? 0);
+  }
+
+  private documentFilters(options: { status?: string; q?: string }): { where: string; params: unknown[] } {
     const clauses: string[] = [];
     const params: unknown[] = [];
     if (options.status) {
@@ -148,12 +235,7 @@ export class Ledger {
       const query = `%${options.q}%`;
       params.push(query, query, query);
     }
-    const where = clauses.length ? `WHERE ${clauses.join(" AND ")}` : "";
-    params.push(options.limit ?? 200, options.offset ?? 0);
-    return this.fetchAll<DocumentRecord>(
-      `SELECT * FROM documents ${where} ORDER BY due_date IS NULL, due_date, document_id LIMIT ? OFFSET ?`,
-      ...params
-    );
+    return { where: clauses.length ? `WHERE ${clauses.join(" AND ")}` : "", params };
   }
 
   appendEvent(input: {
@@ -162,26 +244,17 @@ export class Ledger {
     eventType: string;
     payload?: Record<string, unknown>;
   }): number {
-    const db = this.connect();
-    try {
-      const info = db.prepare(`
-        INSERT INTO events (document_id, batch_id, event_type, event_at, payload_json)
-        VALUES (?, ?, ?, ?, ?)
-      `).run(
-        input.documentId ?? null,
-        input.batchId ?? null,
-        input.eventType,
-        new Date().toISOString(),
-        JSON.stringify(input.payload ?? {})
-      );
-      return Number(info.lastInsertRowid);
-    } finally {
-      db.close();
-    }
-  }
-
-  private connect(): Database.Database {
-    return new Database(this.filePath);
+    const info = this.connection().prepare(`
+      INSERT INTO events (document_id, batch_id, event_type, event_at, payload_json)
+      VALUES (?, ?, ?, ?, ?)
+    `).run(
+      input.documentId ?? null,
+      input.batchId ?? null,
+      input.eventType,
+      new Date().toISOString(),
+      JSON.stringify(input.payload ?? {})
+    );
+    return Number(info.lastInsertRowid);
   }
 
   private upsert(table: string, key: string, allowedColumns: Set<string>, values: Record<string, unknown>): void {
@@ -196,34 +269,19 @@ export class Ledger {
     const updateClause = (updateColumns.length ? updateColumns : [key])
       .map((column) => `${column} = excluded.${column}`)
       .join(", ");
-    const db = this.connect();
-    try {
-      db.prepare(`
-        INSERT INTO ${table} (${columns.join(", ")})
-        VALUES (${placeholders})
-        ON CONFLICT(${key}) DO UPDATE SET ${updateClause}
-      `).run(cleanEntries.map(([, value]) => normalizeSqlValue(value)));
-    } finally {
-      db.close();
-    }
+    this.connection().prepare(`
+      INSERT INTO ${table} (${columns.join(", ")})
+      VALUES (${placeholders})
+      ON CONFLICT(${key}) DO UPDATE SET ${updateClause}
+    `).run(cleanEntries.map(([, value]) => normalizeSqlValue(value)));
   }
 
   private fetchOne<T>(sql: string, ...params: unknown[]): T | undefined {
-    const db = this.connect();
-    try {
-      return db.prepare(sql).get(params) as T | undefined;
-    } finally {
-      db.close();
-    }
+    return this.connection().prepare(sql).get(params) as T | undefined;
   }
 
   private fetchAll<T>(sql: string, ...params: unknown[]): T[] {
-    const db = this.connect();
-    try {
-      return db.prepare(sql).all(params) as T[];
-    } finally {
-      db.close();
-    }
+    return this.connection().prepare(sql).all(params) as T[];
   }
 }
 

@@ -11,10 +11,10 @@ npm install
 npm run build
 npm test
 
-npm run mail-bills -- bootstrap --config ../mail-bills/config.yaml --dry-run
-npm run mail-bills -- import --config ../mail-bills/config.yaml --dry-run
-npm run mail-bills -- process-pending --config ../mail-bills/config.yaml --dry-run
-npm run mail-bills -- pairing --config ../mail-bills/config.yaml --base-url http://yoyodyne:8765 --qr
+npm run mail-bills -- bootstrap --config config.yaml --dry-run
+npm run mail-bills -- import --config config.yaml --dry-run
+npm run mail-bills -- process-pending --config config.yaml --dry-run
+npm run mail-bills -- pairing --config config.yaml --base-url http://yoyodyne:8765 --qr
 npm run start -- --host 0.0.0.0 --port 8765
 npm run start -- --host 0.0.0.0 --port 8765 --log-level debug
 ```
@@ -99,25 +99,25 @@ The iPhone app uses the same shared bearer-token pairing model as the Python imp
 Generate or reuse a token and print pairing JSON:
 
 ```bash
-npm run mail-bills -- pairing --config ../mail-bills/config.yaml --write-token --base-url http://yoyodyne:8765
+npm run mail-bills -- pairing --config config.yaml --write-token --base-url http://yoyodyne:8765
 ```
 
 Print a terminal QR code:
 
 ```bash
-npm run mail-bills -- pairing --config ../mail-bills/config.yaml --base-url http://yoyodyne:8765 --qr
+npm run mail-bills -- pairing --config config.yaml --base-url http://yoyodyne:8765 --qr
 ```
 
 Write a PNG QR code:
 
 ```bash
-npm run mail-bills -- pairing --config ../mail-bills/config.yaml --base-url http://yoyodyne:8765 --qr-png /tmp/mail-bills-pairing.png
+npm run mail-bills -- pairing --config config.yaml --base-url http://yoyodyne:8765 --qr-png /tmp/mail-bills-pairing.png
 ```
 
 Rotate the token:
 
 ```bash
-npm run mail-bills -- pairing --config ../mail-bills/config.yaml --rotate-token --base-url http://yoyodyne:8765
+npm run mail-bills -- pairing --config config.yaml --rotate-token --base-url http://yoyodyne:8765
 ```
 
 The QR payload contains:
@@ -148,7 +148,7 @@ The QR payload contains:
 
 ## Current Notes
 
-- The service reads the existing `../mail-bills/config.yaml` by default in the scripts above.
+- The service reads `config.yaml` from the current working directory by default.
 - The existing live ledger at `../mail-bills/data/ledger.sqlite` remains compatible.
 - The browser UI calls the REST endpoints directly and uses live actions for review, field updates, archive, completion, delete/quarantine, dry checks, and pipeline runs.
 - Set `ocr.model_fallback_enabled: true`, `ocr.model_provider: ollama`, and `ocr.model_name` to an installed Ollama model to generate better OCR summaries from local models.

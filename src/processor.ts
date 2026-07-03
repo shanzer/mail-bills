@@ -49,15 +49,20 @@ export async function processPending(input: {
   services?: ProcessorServices;
 }): Promise<PendingProcessResult> {
   const dryRun = Boolean(input.dryRun);
+  const ownLedger = !input.ledger;
   const ledger = input.ledger ?? new Ledger(configPaths(input.config).ledgerPath);
   ledger.initialize();
-  const services = input.services ?? defaultProcessorServices();
-  const importSummary = await services.importScanner({ config: input.config, dryRun, stableDelayMs: input.stableDelayMs ?? 1000 });
-  const batches: BatchProcessResult[] = [];
-  for (const batchId of pendingBatchIds(ledger)) {
-    batches.push(await processBatch({ batchId, config: input.config, ledger, dryRun, services }));
+  try {
+    const services = input.services ?? defaultProcessorServices();
+    const importSummary = await services.importScanner({ config: input.config, dryRun, stableDelayMs: input.stableDelayMs ?? 1000 });
+    const batches: BatchProcessResult[] = [];
+    for (const batchId of pendingBatchIds(ledger)) {
+      batches.push(await processBatch({ batchId, config: input.config, ledger, dryRun, services }));
+    }
+    return { dryRun, importSummary, batches, errors: batches.flatMap((batch) => batch.errors) };
+  } finally {
+    if (ownLedger) ledger.close();
   }
-  return { dryRun, importSummary, batches, errors: batches.flatMap((batch) => batch.errors) };
 }
 
 export async function processBatch(input: {
@@ -68,64 +73,81 @@ export async function processBatch(input: {
   services?: ProcessorServices;
 }): Promise<BatchProcessResult> {
   const dryRun = Boolean(input.dryRun);
+  const ownLedger = !input.ledger;
   const ledger = input.ledger ?? new Ledger(configPaths(input.config).ledgerPath);
   ledger.initialize();
-  const services = input.services ?? defaultProcessorServices();
-  const plannedDocuments = new Map<string, DocumentRecord>();
-  const errors: Array<{ document_id: string; message: string }> = [];
-  let processed = 0;
+  try {
+    const services = input.services ?? defaultProcessorServices();
+    const duplicateSources = services.duplicateSourceLoader(ledger);
+    const plannedDocuments = new Map<string, DocumentRecord>();
+    const errors: Array<{ document_id: string; message: string }> = [];
+    let processed = 0;
 
-  for (const document of processableDocuments(ledger, input.batchId)) {
-    const documentId = textValue(document.document_id);
-    try {
-      const updated = await processDocument(document, { config: input.config, ledger, dryRun, services });
-      processed += 1;
-      plannedDocuments.set(documentId, updated);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      errors.push({ document_id: documentId, message });
-      if (dryRun) {
-        plannedDocuments.set(documentId, { ...document, status: "Error", error_message: message });
-      } else {
-        ledger.upsertDocument({ document_id: documentId, status: "Error", error_message: message });
-        ledger.appendEvent({ documentId, batchId: document.batch_id, eventType: "processing_error", payload: { message } });
-        plannedDocuments.set(documentId, ledger.getDocument(documentId) ?? { ...document, status: "Error", error_message: message });
+    for (const document of processableDocuments(ledger, input.batchId)) {
+      const documentId = textValue(document.document_id);
+      try {
+        const updated = await processDocument(document, { config: input.config, ledger, dryRun, services, duplicateSources });
+        processed += 1;
+        plannedDocuments.set(documentId, updated);
+        duplicateSources.push(updated);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        errors.push({ document_id: documentId, message });
+        if (dryRun) {
+          plannedDocuments.set(documentId, { ...document, status: "Error", error_message: message });
+        } else {
+          ledger.upsertDocument({ document_id: documentId, status: "Error", error_message: message });
+          ledger.appendEvent({ documentId, batchId: document.batch_id, eventType: "processing_error", payload: { message } });
+          plannedDocuments.set(documentId, ledger.getDocument(documentId) ?? { ...document, status: "Error", error_message: message });
+        }
       }
     }
-  }
 
-  const documents = dryRun
-    ? documentsForSummary(ledger, input.batchId, plannedDocuments)
-    : [...plannedDocuments.values()].sort((left, right) => left.document_id.localeCompare(right.document_id));
-  if (!dryRun) ledger.upsertBatch({ batch_id: input.batchId, status: errors.length ? "processed_with_errors" : "processed" });
-  return { batchId: input.batchId, processed, failed: errors.length, dryRun, documents, errors };
+    const documents = dryRun
+      ? documentsForSummary(ledger, input.batchId, plannedDocuments)
+      : [...plannedDocuments.values()].sort((left, right) => left.document_id.localeCompare(right.document_id));
+    if (!dryRun) ledger.upsertBatch({ batch_id: input.batchId, status: errors.length ? "processed_with_errors" : "processed" });
+    return { batchId: input.batchId, processed, failed: errors.length, dryRun, documents, errors };
+  } finally {
+    if (ownLedger) ledger.close();
+  }
 }
 
 async function processDocument(
   document: DocumentRecord,
-  input: { config: MailBillsConfig; ledger: Ledger; dryRun: boolean; services: ProcessorServices }
+  input: { config: MailBillsConfig; ledger: Ledger; dryRun: boolean; services: ProcessorServices; duplicateSources: DocumentRecord[] }
 ): Promise<DocumentRecord> {
   const documentId = textValue(document.document_id);
+  // OCR and classification are async and must run outside the transaction.
   const ocrResult = await input.services.ocrProcessor({ documentId, ledger: input.ledger, ocrConfig: input.config.ocr, dryRun: input.dryRun });
   const classification = input.services.classifier(ocrResult.text, { shortcutLabel: document.shortcut_label ?? document.category });
-  let current = { ...document, ...documentUpdate(document, ocrResult, classification) };
-  if (!input.dryRun) {
-    input.ledger.upsertDocument(current);
-    current = input.ledger.getDocument(documentId) ?? current;
+  const update = documentUpdate(document, ocrResult, classification);
+
+  if (input.dryRun) {
+    // Dry-run: compute results without touching the ledger.
+    let current = { ...document, ...update };
+    const duplicateResult = input.services.duplicateDetector(current, input.duplicateSources);
+    const duplicateUpdate = duplicateDocumentUpdate(documentId, duplicateResult);
+    if (duplicateUpdate) current = { ...current, ...duplicateUpdate };
+    return current;
   }
-  const duplicateResult = input.services.duplicateDetector(current, input.services.duplicateSourceLoader(input.ledger));
-  const duplicateUpdate = duplicateDocumentUpdate(documentId, duplicateResult);
-  if (duplicateUpdate) {
-    current = { ...current, ...duplicateUpdate };
-    if (!input.dryRun) {
+
+  // Non-dry-run: wrap all ledger writes in a single transaction so a
+  // partial failure (e.g. appendEvent throws) rolls back classification
+  // and duplicate writes atomically.  No awaits may appear inside the
+  // callback — better-sqlite3 requires the transaction to be synchronous.
+  return input.ledger.transaction(() => {
+    input.ledger.upsertDocument({ ...document, ...update });
+    let current = input.ledger.getDocument(documentId) ?? { ...document, ...update };
+    const duplicateResult = input.services.duplicateDetector(current, input.duplicateSources);
+    const duplicateUpdate = duplicateDocumentUpdate(documentId, duplicateResult);
+    if (duplicateUpdate) {
       input.ledger.upsertDocument(duplicateUpdate);
-      current = input.ledger.getDocument(documentId) ?? current;
+      current = input.ledger.getDocument(documentId) ?? { ...current, ...duplicateUpdate };
     }
-  }
-  if (!input.dryRun) {
-    input.ledger.appendEvent({ documentId, batchId: document.batch_id, eventType: "processed", payload: { dry_run: input.dryRun, status: current.status } });
-  }
-  return current;
+    input.ledger.appendEvent({ documentId, batchId: document.batch_id, eventType: "processed", payload: { dry_run: false, status: current.status } });
+    return current;
+  });
 }
 
 function documentUpdate(document: DocumentRecord, ocrResult: OcrResult, classification: ClassificationResult): DocumentRecord {

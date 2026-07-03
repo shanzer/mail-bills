@@ -28,7 +28,7 @@ npm run mail-bills -- <command> ...      # CLI, see src/cli.ts printHelp()
 after every source change** or you will run stale code. `check` and `test` run
 against `.ts` directly and do not need a build.
 
-CLI commands (all take `--config <path>`, default `../mail-bills/config.yaml`):
+CLI commands (all take `--config <path>`, default `./config.yaml`):
 `api`, `bootstrap`, `import`, `process-pending`, `process-batch <id>`,
 `review list|resolve`, `action <docId> --action <a>`, `backfill-summaries`,
 `pairing`. Most mutating commands accept `--dry-run`.

@@ -7,6 +7,9 @@ import { loadSidecar, SidecarValidationError } from "./sidecar.js";
 
 const SAFE_ID_RE = /^[A-Za-z0-9._-]+$/;
 
+// The %PDF header must appear near the start (spec allows leading junk up to 1024 bytes).
+const PDF_MAGIC = Buffer.from("%PDF");
+
 export class IntakeUploadError extends Error {
   constructor(message: string, readonly statusCode = 400) {
     super(message);
@@ -34,6 +37,10 @@ export function acceptUpload(input: {
   if (!input.pdfBytes.length) throw new IntakeUploadError("pdf is required");
   if (!input.sidecarBytes.length) throw new IntakeUploadError("sidecar is required");
 
+  if (!input.pdfBytes.subarray(0, 1024).includes(PDF_MAGIC)) {
+    throw new IntakeUploadError("pdf must be a PDF (missing %PDF header)");
+  }
+
   let raw: Record<string, unknown>;
   try {
     raw = JSON.parse(input.sidecarBytes.toString("utf8")) as Record<string, unknown>;
@@ -54,8 +61,8 @@ export function acceptUpload(input: {
     if (
       fs.existsSync(pdfPath) &&
       fs.existsSync(sidecarPath) &&
-      Buffer.compare(fs.readFileSync(pdfPath), input.pdfBytes) === 0 &&
-      Buffer.compare(fs.readFileSync(sidecarPath), input.sidecarBytes) === 0
+      sameContent(pdfPath, input.pdfBytes) &&
+      sameContent(sidecarPath, input.sidecarBytes)
     ) {
       return { documentId, pdfPath, sidecarPath, created: false };
     }
@@ -64,15 +71,21 @@ export function acceptUpload(input: {
 
   const pdfPart = path.join(intakeDir, `${documentId}.pdf.part`);
   const sidecarPart = path.join(intakeDir, `${documentId}.json.part`);
+  const created: string[] = [];
   try {
     writeDurable(pdfPart, input.pdfBytes);
+    created.push(pdfPart);
     writeDurable(sidecarPart, input.sidecarBytes);
+    created.push(sidecarPart);
     loadSidecar(sidecarPart);
     fs.renameSync(pdfPart, pdfPath);
     fs.renameSync(sidecarPart, sidecarPath);
   } catch (error) {
-    cleanup(pdfPart, sidecarPart);
+    cleanup(...created); // never delete the other writer's .part files
     if (error instanceof SidecarValidationError) throw new IntakeUploadError(error.message);
+    if ((error as NodeJS.ErrnoException).code === "EEXIST") {
+      throw new UploadCollisionError(`upload already in progress: ${documentId}`);
+    }
     throw error;
   }
 
@@ -107,13 +120,20 @@ function safeSegment(value: string, fieldName: string): void {
 }
 
 function writeDurable(filePath: string, bytes: Buffer): void {
-  const fd = fs.openSync(filePath, "w");
+  // "wx" = exclusive create: a concurrent upload of the same documentId fails
+  // fast with EEXIST instead of silently overwriting the other writer's .part.
+  const fd = fs.openSync(filePath, "wx");
   try {
     fs.writeFileSync(fd, bytes);
     fs.fsyncSync(fd);
   } finally {
     fs.closeSync(fd);
   }
+}
+
+function sameContent(filePath: string, bytes: Buffer): boolean {
+  if (fs.statSync(filePath).size !== bytes.length) return false;
+  return Buffer.compare(fs.readFileSync(filePath), bytes) === 0;
 }
 
 function cleanup(...paths: string[]): void {

@@ -35,16 +35,22 @@ export async function scanImports(input: {
   sources.push([paths.uploadIntakeDir, paths.uploadErrorDir]);
   const uniqueSources = dedupeSources(sources);
   const totals = { imported: 0, failed: 0, skipped: 0, dryRun };
-  for (const [intakeDir, errorDir] of uniqueSources) {
-    const summary = await scanImportDir(input.config, intakeDir, errorDir, dryRun, stableDelayMs);
-    totals.imported += summary.imported;
-    totals.failed += summary.failed;
-    totals.skipped += summary.skipped;
+  const ledger = new Ledger(paths.ledgerPath);
+  if (!dryRun) ledger.initialize();
+  try {
+    for (const [intakeDir, errorDir] of uniqueSources) {
+      const summary = await scanImportDir(input.config, intakeDir, errorDir, dryRun, stableDelayMs, ledger);
+      totals.imported += summary.imported;
+      totals.failed += summary.failed;
+      totals.skipped += summary.skipped;
+    }
+  } finally {
+    ledger.close();
   }
   return totals;
 }
 
-async function scanImportDir(config: MailBillsConfig, intakeDir: string, errorDir: string, dryRun: boolean, stableDelayMs: number): Promise<ImportSummary> {
+async function scanImportDir(config: MailBillsConfig, intakeDir: string, errorDir: string, dryRun: boolean, stableDelayMs: number, sharedLedger: Ledger): Promise<ImportSummary> {
   if (!fs.existsSync(intakeDir)) return { imported: 0, failed: 0, skipped: 0, dryRun };
   let imported = 0;
   let failed = 0;
@@ -62,7 +68,7 @@ async function scanImportDir(config: MailBillsConfig, intakeDir: string, errorDi
       continue;
     }
     try {
-      importPair(config, pdfPath, sidecarPath, dryRun);
+      importPair(config, pdfPath, sidecarPath, dryRun, sharedLedger);
       imported += 1;
     } catch (error) {
       failed += 1;
@@ -74,7 +80,7 @@ async function scanImportDir(config: MailBillsConfig, intakeDir: string, errorDi
   return { imported, failed, skipped, dryRun };
 }
 
-export function importPair(config: MailBillsConfig, pdfPath: string, sidecarPath: string, dryRun = false): void {
+export function importPair(config: MailBillsConfig, pdfPath: string, sidecarPath: string, dryRun = false, sharedLedger?: Ledger): void {
   const sidecar = loadSidecar(sidecarPath);
   const batchSegment = safeSegment(sidecar.batchId, "batchId");
   const documentSegment = safeSegment(sidecar.documentId, "documentId");
@@ -98,36 +104,42 @@ export function importPair(config: MailBillsConfig, pdfPath: string, sidecarPath
     throw new TransientImportError(`copied file hash mismatch for ${pdfPath}`);
   }
 
-  const ledger = new Ledger(paths.ledgerPath);
-  ledger.initialize();
-  const importedAt = new Date().toISOString();
-  ledger.upsertBatch({
-    batch_id: sidecar.batchId,
-    created_at: sidecar.capturedAt,
-    source: sidecar.source,
-    status: "imported",
-    item_count: fs.readdirSync(localDir).filter((name) => name.endsWith(".pdf")).length
-  });
-  ledger.upsertDocument({
-    document_id: sidecar.documentId,
-    batch_id: sidecar.batchId,
-    source_pdf_path: pdfPath,
-    local_pdf_path: localPdfPath,
-    sidecar_path: localSidecarPath,
-    sha256: sourceSha,
-    created_at: sidecar.capturedAt,
-    imported_at: importedAt,
-    status: "imported",
-    category: sidecar.category,
-    shortcut_label: sidecar.label,
-    retention_decision: "Undecided"
-  });
-  ledger.appendEvent({
-    documentId: sidecar.documentId,
-    batchId: sidecar.batchId,
-    eventType: "imported",
-    payload: { source_pdf_path: pdfPath, local_pdf_path: localPdfPath, sidecar_path: localSidecarPath, sha256: sourceSha }
-  });
+  const ledger = sharedLedger ?? new Ledger(paths.ledgerPath);
+  if (!sharedLedger) ledger.initialize();
+  try {
+    const importedAt = new Date().toISOString();
+    ledger.transaction(() => {
+      ledger.upsertBatch({
+        batch_id: sidecar.batchId,
+        created_at: sidecar.capturedAt,
+        source: sidecar.source,
+        status: "imported",
+        item_count: fs.readdirSync(localDir).filter((name) => name.endsWith(".pdf")).length
+      });
+      ledger.upsertDocument({
+        document_id: sidecar.documentId,
+        batch_id: sidecar.batchId,
+        source_pdf_path: pdfPath,
+        local_pdf_path: localPdfPath,
+        sidecar_path: localSidecarPath,
+        sha256: sourceSha,
+        created_at: sidecar.capturedAt,
+        imported_at: importedAt,
+        status: "imported",
+        category: sidecar.category,
+        shortcut_label: sidecar.label,
+        retention_decision: "Undecided"
+      });
+      ledger.appendEvent({
+        documentId: sidecar.documentId,
+        batchId: sidecar.batchId,
+        eventType: "imported",
+        payload: { source_pdf_path: pdfPath, local_pdf_path: localPdfPath, sidecar_path: localSidecarPath, sha256: sourceSha }
+      });
+    });
+  } finally {
+    if (!sharedLedger) ledger.close();
+  }
   fs.unlinkSync(pdfPath);
   fs.unlinkSync(sidecarPath);
 }

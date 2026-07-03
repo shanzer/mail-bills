@@ -1,11 +1,19 @@
 import fs from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { authorizeAdmin, createApi } from "../src/api.js";
+import { authorizeAdmin, createApi, isSameOrigin, UPLOAD_BODY_LIMIT, UPLOAD_FILE_LIMIT } from "../src/api.js";
 import { configPaths } from "../src/config.js";
 import { scanImports } from "../src/importer.js";
 import { Ledger } from "../src/ledger.js";
+import { PipelineScheduler } from "../src/scheduler.js";
 import { makeConfig, multipartBody, sidecarBytes, tempRoot } from "./helpers.js";
+
+describe("upload limits", () => {
+  it("allows a whole-request body at least as large as the sum of file caps", async () => {
+    const { UPLOAD_BODY_LIMIT, UPLOAD_FILE_LIMIT } = await import("../src/api.js");
+    expect(UPLOAD_BODY_LIMIT).toBeGreaterThanOrEqual(2 * UPLOAD_FILE_LIMIT);
+  });
+});
 
 describe("admin authorization", () => {
   it("allows loopback callers when no admin token is configured", () => {
@@ -43,6 +51,19 @@ describe("admin authorization", () => {
     await app.close();
   });
 
+  it("rate limits repeated failed admin auth", async () => {
+    const config = makeConfig(tempRoot("mail-bills-api-admin-rate-"));
+    config.api = { adminToken: "admin-secret" };
+    const app = createApi(config);
+    for (let i = 0; i < 5; i += 1) {
+      expect((await app.inject({ method: "GET", url: "/api/status", headers: { authorization: "Bearer wrong" } })).statusCode).toBe(401);
+    }
+    expect((await app.inject({ method: "GET", url: "/api/status", headers: { authorization: "Bearer wrong" } })).statusCode).toBe(429);
+    // Blocked even with the correct token.
+    expect((await app.inject({ method: "GET", url: "/api/status", headers: { authorization: "Bearer admin-secret" } })).statusCode).toBe(429);
+    await app.close();
+  });
+
   it("still serves health and the intake endpoint without the admin token", async () => {
     const config = makeConfig(tempRoot("mail-bills-api-auth-"));
     config.api = { adminToken: "admin-secret" };
@@ -66,7 +87,64 @@ describe("admin authorization", () => {
   });
 });
 
+describe("CSRF origin checks", () => {
+  it("isSameOrigin correctly compares origins and hosts", () => {
+    expect(isSameOrigin("http://localhost:80", "localhost")).toBe(true);
+    expect(isSameOrigin("http://evil.example", "localhost")).toBe(false);
+    expect(isSameOrigin(undefined, "localhost")).toBe(true);
+    expect(isSameOrigin("http://evil.example", undefined)).toBe(false);
+    expect(isSameOrigin("null", "localhost")).toBe(false); // sandboxed-iframe Origin: null
+    expect(isSameOrigin("not-a-url", "localhost")).toBe(false);
+  });
+
+  it("rejects cross-origin state-changing requests in loopback-no-token mode", async () => {
+    const app = createApi(makeConfig(tempRoot("mail-bills-api-csrf-")));
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/bootstrap",
+      headers: { origin: "http://evil.example", host: "localhost" }
+    });
+    expect(response.statusCode).toBe(403);
+    await app.close();
+  });
+
+  it("allows same-origin posts and origin-less CLI posts", async () => {
+    const app = createApi(makeConfig(tempRoot("mail-bills-api-csrf-")));
+    const sameOrigin = await app.inject({ method: "POST", url: "/api/bootstrap", headers: { origin: "http://localhost:80", host: "localhost" } });
+    expect(sameOrigin.statusCode).toBe(200);
+    const noOrigin = await app.inject({ method: "POST", url: "/api/bootstrap" });
+    expect(noOrigin.statusCode).toBe(200);
+    await app.close();
+  });
+
+  it("does not block cross-origin GETs", async () => {
+    const app = createApi(makeConfig(tempRoot("mail-bills-api-csrf-")));
+    const response = await app.inject({ method: "GET", url: "/api/status", headers: { origin: "http://evil.example", host: "localhost" } });
+    expect(response.statusCode).toBe(200);
+    await app.close();
+  });
+});
+
 describe("REST API", () => {
+  it("does not leak filesystem paths in upload responses", async () => {
+    const config = makeConfig(tempRoot("mail-bills-api-paths-"));
+    const app = createApi(config);
+    const multipart = multipartBody({
+      pdf: ["doc-1.pdf", Buffer.from("%PDF upload\n"), "application/pdf"],
+      sidecar: ["doc-1.json", sidecarBytes(), "application/json"]
+    });
+    const intake = await app.inject({
+      method: "POST",
+      url: "/api/mail-bills/intake",
+      headers: { authorization: "Bearer secret-token", "content-type": multipart.contentType },
+      payload: multipart.body
+    });
+    expect(intake.statusCode).toBe(201);
+    expect(intake.json()).not.toHaveProperty("pdfPath");
+    expect(intake.json()).not.toHaveProperty("sidecarPath");
+    await app.close();
+  });
+
   it("exposes health", async () => {
     const app = createApi(makeConfig(tempRoot("mail-bills-api-")));
     const response = await app.inject({ method: "GET", url: "/health" });
@@ -156,9 +234,11 @@ describe("REST API", () => {
     expect(body).toMatchObject({ ok: true, created: true, source: "browser_ui" });
     expect(body.documentId).toMatch(/^ui-/);
     expect(body.batchId).toMatch(/^browser-/);
-    expect(fs.existsSync(body.pdfPath)).toBe(true);
-    expect(fs.existsSync(body.sidecarPath)).toBe(true);
-    const sidecar = JSON.parse(fs.readFileSync(body.sidecarPath, "utf8"));
+    const pdfPath = path.join(config.intakeUpload.intakeDir, `${body.documentId}.pdf`);
+    const sidecarPath = path.join(config.intakeUpload.intakeDir, `${body.documentId}.json`);
+    expect(fs.existsSync(pdfPath)).toBe(true);
+    expect(fs.existsSync(sidecarPath)).toBe(true);
+    const sidecar = JSON.parse(fs.readFileSync(sidecarPath, "utf8"));
     expect(sidecar).toMatchObject({
       documentId: body.documentId,
       batchId: body.batchId,
@@ -328,6 +408,22 @@ describe("REST API", () => {
     await app.close();
   });
 
+  it("returns total/limit/offset for pagination", async () => {
+    const config = makeConfig(tempRoot("mail-bills-api-page-"));
+    const app = createApi(config);
+    const ledger = new Ledger(configPaths(config).ledgerPath);
+    ledger.initialize();
+    for (let i = 0; i < 5; i += 1) ledger.upsertDocument({ document_id: `p${i}`, status: "Inbox" });
+    ledger.close();
+    const response = await app.inject({ method: "GET", url: "/api/documents?limit=2&offset=0" });
+    const body = response.json();
+    expect(body.documents).toHaveLength(2);
+    expect(body.total).toBe(5);
+    expect(body.limit).toBe(2);
+    expect(body.offset).toBe(0);
+    await app.close();
+  });
+
   it("returns iPhone pairing QR data and can rotate the intake token", async () => {
     const config = makeConfig(tempRoot("mail-bills-api-"));
     const app = createApi(config);
@@ -348,6 +444,17 @@ describe("REST API", () => {
     await app.close();
   });
 
+  it("rejects a public rotate-token baseUrl without burning the token", async () => {
+    const config = makeConfig(tempRoot("mail-bills-api-rotate-"));
+    const app = createApi(config);
+    const before = config.intakeUpload.token;
+    const response = await app.inject({ method: "POST", url: "/api/pairing/rotate-token", payload: { baseUrl: "http://evil.example.com" } });
+    expect(response.statusCode).toBe(400);
+    expect(config.intakeUpload.token).toBe(before);
+    expect(fs.existsSync(config.configPath!)).toBe(false);
+    await app.close();
+  });
+
   it("runs live process-pending without notification service configuration", async () => {
     const config = makeConfig(tempRoot("mail-bills-api-"));
     const app = createApi(config);
@@ -362,6 +469,64 @@ describe("REST API", () => {
     expect(response.json()).toMatchObject({ ok: true, dryRun: false, batches: [] });
     await app.close();
   });
+
+  it("returns 409 from pipeline routes while a run is in progress", async () => {
+    const app = createApi(makeConfig(tempRoot("mail-bills-api-mutex-")));
+    const scheduler = (app as unknown as { pipelineScheduler: PipelineScheduler }).pipelineScheduler;
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+    const held = scheduler.runExclusive(async () => { await gate; return "held"; });
+
+    const pending = await app.inject({ method: "POST", url: "/api/pipeline/process-pending", payload: { dryRun: true } });
+    expect(pending.statusCode).toBe(409);
+    expect(pending.json().schedule).toBeDefined();
+
+    const batch = await app.inject({ method: "POST", url: "/api/pipeline/batches/b1/process", payload: { dryRun: true } });
+    expect(batch.statusCode).toBe(409);
+    expect(batch.json().schedule).toBeDefined();
+
+    release();
+    expect(await held).toBe("held");
+    await app.close();
+  });
+
+  it("clamps non-numeric and out-of-range limit/offset instead of 500ing", async () => {
+    const config = makeConfig(tempRoot("mail-bills-api-clamp-"));
+    const app = createApi(config);
+    const ledger = new Ledger(configPaths(config).ledgerPath);
+    ledger.initialize();
+    for (const id of ["d1", "d2", "d3"]) ledger.upsertDocument({ document_id: id, status: "Inbox" });
+    ledger.close();
+
+    const nan = await app.inject({ method: "GET", url: "/api/documents?limit=abc&offset=xyz" });
+    expect(nan.statusCode).toBe(200);
+    expect(nan.json().documents).toHaveLength(3);
+
+    const clamped = await app.inject({ method: "GET", url: "/api/documents?limit=-5" });
+    expect(clamped.statusCode).toBe(200);
+    expect(clamped.json().documents).toHaveLength(1); // clamped to min 1
+
+    const paged = await app.inject({ method: "GET", url: "/api/documents?limit=2&offset=2" });
+    expect(paged.json().documents).toHaveLength(1);
+    await app.close();
+  });
+});
+
+it("rate limits repeated failed intake auth", async () => {
+  const app = createApi(makeConfig(tempRoot("mail-bills-api-rate-")));
+  const multipart = multipartBody({
+    pdf: ["doc-1.pdf", Buffer.from("%PDF upload\n"), "application/pdf"],
+    sidecar: ["doc-1.json", sidecarBytes(), "application/json"]
+  });
+  const attempt = (auth: string) => app.inject({
+    method: "POST", url: "/api/mail-bills/intake",
+    headers: { authorization: auth, "content-type": multipart.contentType },
+    payload: multipart.body
+  });
+  for (let i = 0; i < 5; i += 1) expect((await attempt("Bearer wrong")).statusCode).toBe(401);
+  expect((await attempt("Bearer wrong")).statusCode).toBe(429);
+  expect((await attempt("Bearer secret-token")).statusCode).toBe(429); // blocked even with the right token
+  await app.close();
 });
 
 function multipartBrowserImport(input: {

@@ -10,6 +10,59 @@ export const PAIRING_PATH = "/api/mail-bills/intake";
 
 const LOOPBACK_HOSTS = new Set(["127.0.0.1", "localhost", "::1"]);
 
+const PRIVATE_HOST_SUFFIXES = [".local", ".lan", ".home", ".internal", ".ts.net"];
+
+export class PairingBaseUrlError extends Error {}
+
+/**
+ * The pairing payload embeds the live intake token, so the endpoint host must
+ * be somewhere we trust: loopback, RFC1918, CGNAT (Tailscale), link-local,
+ * mDNS/.local-style suffixes, or a single-label LAN hostname. Public FQDNs and
+ * public IPs are rejected to prevent QR-directed token exfiltration.
+ */
+export function validatePairingBaseUrl(baseUrl: string): string {
+  let url: URL;
+  try {
+    url = new URL(baseUrl);
+  } catch {
+    throw new PairingBaseUrlError(`baseUrl is not a valid URL: ${baseUrl}`);
+  }
+  if (url.protocol !== "http:" && url.protocol !== "https:") {
+    throw new PairingBaseUrlError(`baseUrl must be http or https, got ${url.protocol}`);
+  }
+  const host = url.hostname.replace(/^\[|\]$/g, "").toLowerCase();
+  if (!isPrivateHost(host)) {
+    throw new PairingBaseUrlError(`baseUrl host is not a loopback/LAN/private host: ${host}`);
+  }
+  return baseUrl;
+}
+
+function isPrivateHost(host: string): boolean {
+  if (host === "localhost" || host === "::1") return true;
+  // single-label LAN name (e.g. yoyodyne, mac-mini). Note: bare names like
+  // "evil" are accepted by design — resolution happens on the trusted LAN.
+  if (!host.includes(".") && !host.includes(":")) return true;
+  if (PRIVATE_HOST_SUFFIXES.some((suffix) => host.endsWith(suffix))) return true;
+  return isPrivateIp(host);
+}
+
+function isPrivateIp(host: string): boolean {
+  const v4 = host.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
+  if (v4) {
+    const octets = v4.slice(1).map(Number);
+    if (octets.some((octet) => octet > 255)) return false;
+    const [a, b] = octets;
+    if (a === 127 || a === 10) return true;
+    if (a === 172 && b >= 16 && b <= 31) return true;
+    if (a === 192 && b === 168) return true;
+    if (a === 100 && b >= 64 && b <= 127) return true; // CGNAT (Tailscale)
+    if (a === 169 && b === 254) return true; // link-local
+    return false;
+  }
+  return host.startsWith("fe80:") ||
+    (host.includes(":") && (host.startsWith("fd") || host.startsWith("fc"))); // IPv6 link-local/ULA
+}
+
 export interface PairingPayload {
   endpoint: string;
   token: string;
@@ -28,7 +81,8 @@ export function buildPairingPayload(input: {
 }): PairingPayload {
   const token = input.token ?? input.config.intakeUpload.token;
   if (!token) throw new Error("No intake upload token configured. Use --write-token to generate and save one.");
-  const endpoint = endpointFor(input.config, input.baseUrl);
+  const baseUrl = input.baseUrl ? validatePairingBaseUrl(input.baseUrl) : undefined;
+  const endpoint = endpointFor(input.config, baseUrl);
   return {
     endpoint,
     token,

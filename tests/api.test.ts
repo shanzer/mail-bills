@@ -75,6 +75,25 @@ describe("admin authorization", () => {
 });
 
 describe("REST API", () => {
+  it("does not leak filesystem paths in upload responses", async () => {
+    const config = makeConfig(tempRoot("mail-bills-api-paths-"));
+    const app = createApi(config);
+    const multipart = multipartBody({
+      pdf: ["doc-1.pdf", Buffer.from("%PDF upload\n"), "application/pdf"],
+      sidecar: ["doc-1.json", sidecarBytes(), "application/json"]
+    });
+    const intake = await app.inject({
+      method: "POST",
+      url: "/api/mail-bills/intake",
+      headers: { authorization: "Bearer secret-token", "content-type": multipart.contentType },
+      payload: multipart.body
+    });
+    expect(intake.statusCode).toBe(201);
+    expect(intake.json()).not.toHaveProperty("pdfPath");
+    expect(intake.json()).not.toHaveProperty("sidecarPath");
+    await app.close();
+  });
+
   it("exposes health", async () => {
     const app = createApi(makeConfig(tempRoot("mail-bills-api-")));
     const response = await app.inject({ method: "GET", url: "/health" });
@@ -164,9 +183,11 @@ describe("REST API", () => {
     expect(body).toMatchObject({ ok: true, created: true, source: "browser_ui" });
     expect(body.documentId).toMatch(/^ui-/);
     expect(body.batchId).toMatch(/^browser-/);
-    expect(fs.existsSync(body.pdfPath)).toBe(true);
-    expect(fs.existsSync(body.sidecarPath)).toBe(true);
-    const sidecar = JSON.parse(fs.readFileSync(body.sidecarPath, "utf8"));
+    const pdfPath = path.join(config.intakeUpload.intakeDir, `${body.documentId}.pdf`);
+    const sidecarPath = path.join(config.intakeUpload.intakeDir, `${body.documentId}.json`);
+    expect(fs.existsSync(pdfPath)).toBe(true);
+    expect(fs.existsSync(sidecarPath)).toBe(true);
+    const sidecar = JSON.parse(fs.readFileSync(sidecarPath, "utf8"));
     expect(sidecar).toMatchObject({
       documentId: body.documentId,
       batchId: body.batchId,

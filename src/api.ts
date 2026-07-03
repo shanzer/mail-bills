@@ -58,7 +58,7 @@ export function createApi(config: MailBillsConfig): FastifyInstance {
         if (part.fieldname === "sidecar") sidecarBytes = bytes;
       }
       const result = acceptUpload({ pdfBytes: pdfBytes ?? Buffer.alloc(0), sidecarBytes: sidecarBytes ?? Buffer.alloc(0), config });
-      return reply.code(result.created ? 201 : 200).send({ ok: true, created: result.created, documentId: result.documentId, pdfPath: result.pdfPath, sidecarPath: result.sidecarPath });
+      return reply.code(result.created ? 201 : 200).send({ ok: true, created: result.created, documentId: result.documentId });
     } catch (error) {
       if (error instanceof IntakeUploadError) return reply.code(error.statusCode).send({ ok: false, error: error.message });
       throw error;
@@ -94,9 +94,7 @@ export function createApi(config: MailBillsConfig): FastifyInstance {
         created: result.created,
         source: "browser_ui",
         batchId: sidecar.batchId,
-        documentId: result.documentId,
-        pdfPath: result.pdfPath,
-        sidecarPath: result.sidecarPath
+        documentId: result.documentId
       });
     } catch (error) {
       if (error instanceof IntakeUploadError) return reply.code(error.statusCode).send({ ok: false, error: error.message });

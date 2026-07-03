@@ -118,26 +118,36 @@ async function processDocument(
   input: { config: MailBillsConfig; ledger: Ledger; dryRun: boolean; services: ProcessorServices; duplicateSources: DocumentRecord[] }
 ): Promise<DocumentRecord> {
   const documentId = textValue(document.document_id);
+  // OCR and classification are async and must run outside the transaction.
   const ocrResult = await input.services.ocrProcessor({ documentId, ledger: input.ledger, ocrConfig: input.config.ocr, dryRun: input.dryRun });
   const classification = input.services.classifier(ocrResult.text, { shortcutLabel: document.shortcut_label ?? document.category });
-  let current = { ...document, ...documentUpdate(document, ocrResult, classification) };
-  if (!input.dryRun) {
-    input.ledger.upsertDocument(current);
-    current = input.ledger.getDocument(documentId) ?? current;
+  const update = documentUpdate(document, ocrResult, classification);
+
+  if (input.dryRun) {
+    // Dry-run: compute results without touching the ledger.
+    let current = { ...document, ...update };
+    const duplicateResult = input.services.duplicateDetector(current, input.duplicateSources);
+    const duplicateUpdate = duplicateDocumentUpdate(documentId, duplicateResult);
+    if (duplicateUpdate) current = { ...current, ...duplicateUpdate };
+    return current;
   }
-  const duplicateResult = input.services.duplicateDetector(current, input.duplicateSources);
-  const duplicateUpdate = duplicateDocumentUpdate(documentId, duplicateResult);
-  if (duplicateUpdate) {
-    current = { ...current, ...duplicateUpdate };
-    if (!input.dryRun) {
+
+  // Non-dry-run: wrap all ledger writes in a single transaction so a
+  // partial failure (e.g. appendEvent throws) rolls back classification
+  // and duplicate writes atomically.  No awaits may appear inside the
+  // callback — better-sqlite3 requires the transaction to be synchronous.
+  return input.ledger.transaction(() => {
+    input.ledger.upsertDocument({ ...document, ...update });
+    let current = input.ledger.getDocument(documentId) ?? { ...document, ...update };
+    const duplicateResult = input.services.duplicateDetector(current, input.duplicateSources);
+    const duplicateUpdate = duplicateDocumentUpdate(documentId, duplicateResult);
+    if (duplicateUpdate) {
       input.ledger.upsertDocument(duplicateUpdate);
-      current = input.ledger.getDocument(documentId) ?? current;
+      current = input.ledger.getDocument(documentId) ?? { ...current, ...duplicateUpdate };
     }
-  }
-  if (!input.dryRun) {
-    input.ledger.appendEvent({ documentId, batchId: document.batch_id, eventType: "processed", payload: { dry_run: input.dryRun, status: current.status } });
-  }
-  return current;
+    input.ledger.appendEvent({ documentId, batchId: document.batch_id, eventType: "processed", payload: { dry_run: false, status: current.status } });
+    return current;
+  });
 }
 
 function documentUpdate(document: DocumentRecord, ocrResult: OcrResult, classification: ClassificationResult): DocumentRecord {

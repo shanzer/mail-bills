@@ -79,55 +79,67 @@ async function main(argv: string[]): Promise<number> {
   if (command === "review") {
     const ledger = new Ledger(configPaths(config).ledgerPath);
     ledger.initialize();
-    if (rest[0] === "list") {
-      const docs = needsReviewDocuments(ledger);
-      if (!docs.length) console.log("No documents need review.");
-      for (const document of docs) console.log(`${document.document_id} - ${document.vendor ?? "Unknown vendor"} - ${document.review_reason ?? "review required"}`);
-      return 0;
-    }
-    if (rest[0] === "resolve") {
-      const documentId = rest[1];
-      const decision = option(rest, "--decision");
-      if (!documentId || !decision) throw new Error("review resolve requires document id and --decision");
-      const result = await resolveReview({ documentId, decision, ledger, config, dryRun: rest.includes("--dry-run"), dueDate: option(rest, "--due-date") });
-      console.log(JSON.stringify(result, null, 2));
-      return 0;
+    try {
+      if (rest[0] === "list") {
+        const docs = needsReviewDocuments(ledger);
+        if (!docs.length) console.log("No documents need review.");
+        for (const document of docs) console.log(`${document.document_id} - ${document.vendor ?? "Unknown vendor"} - ${document.review_reason ?? "review required"}`);
+        return 0;
+      }
+      if (rest[0] === "resolve") {
+        const documentId = rest[1];
+        const decision = option(rest, "--decision");
+        if (!documentId || !decision) throw new Error("review resolve requires document id and --decision");
+        const result = await resolveReview({ documentId, decision, ledger, config, dryRun: rest.includes("--dry-run"), dueDate: option(rest, "--due-date") });
+        console.log(JSON.stringify(result, null, 2));
+        return 0;
+      }
+    } finally {
+      ledger.close();
     }
   }
   if (command === "action") {
     const ledger = new Ledger(configPaths(config).ledgerPath);
     ledger.initialize();
-    const documentId = rest[0];
-    const action = option(rest, "--action");
-    if (!documentId || !action) throw new Error("action requires document id and --action");
-    const result = await applyDocumentAction({ documentId, action, ledger, config, dryRun: rest.includes("--dry-run"), dueDate: option(rest, "--due-date") });
-    console.log(JSON.stringify(result, null, 2));
-    return result.ok ? 0 : 1;
+    try {
+      const documentId = rest[0];
+      const action = option(rest, "--action");
+      if (!documentId || !action) throw new Error("action requires document id and --action");
+      const result = await applyDocumentAction({ documentId, action, ledger, config, dryRun: rest.includes("--dry-run"), dueDate: option(rest, "--due-date") });
+      console.log(JSON.stringify(result, null, 2));
+      return result.ok ? 0 : 1;
+    } finally {
+      ledger.close();
+    }
   }
   if (command === "backfill-summaries") {
     const dryRun = rest.includes("--dry-run");
     const ledger = new Ledger(configPaths(config).ledgerPath);
     ledger.initialize();
-    const docs = ledger.documentsNeedingSummary();
-    console.log(`Found ${docs.length} document(s) without a bill summary.${dryRun ? " (dry-run)" : ""}`);
-    let ok = 0;
-    let failed = 0;
-    for (const doc of docs) {
-      process.stdout.write(`  ${doc.document_id} ... `);
-      const json = await extractBillSummary(doc.ocr_text ?? "").catch(() => null);
-      if (!json) {
-        process.stdout.write("failed\n");
-        failed += 1;
-        continue;
+    try {
+      const docs = ledger.documentsNeedingSummary();
+      console.log(`Found ${docs.length} document(s) without a bill summary.${dryRun ? " (dry-run)" : ""}`);
+      let ok = 0;
+      let failed = 0;
+      for (const doc of docs) {
+        process.stdout.write(`  ${doc.document_id} ... `);
+        const json = await extractBillSummary(doc.ocr_text ?? "").catch(() => null);
+        if (!json) {
+          process.stdout.write("failed\n");
+          failed += 1;
+          continue;
+        }
+        if (!dryRun) {
+          ledger.upsertDocument({ document_id: doc.document_id, ocr_summary_json: JSON.stringify(json) });
+        }
+        process.stdout.write(`ok (${Object.keys(json).filter((k) => (json as Record<string, unknown>)[k] !== undefined).length} fields)\n`);
+        ok += 1;
       }
-      if (!dryRun) {
-        ledger.upsertDocument({ document_id: doc.document_id, ocr_summary_json: JSON.stringify(json) });
-      }
-      process.stdout.write(`ok (${Object.keys(json).filter((k) => (json as Record<string, unknown>)[k] !== undefined).length} fields)\n`);
-      ok += 1;
+      console.log(`Done: ${ok} updated, ${failed} failed.`);
+      return failed ? 1 : 0;
+    } finally {
+      ledger.close();
     }
-    console.log(`Done: ${ok} updated, ${failed} failed.`);
-    return failed ? 1 : 0;
   }
   if (command === "purge-quarantine") {
     const ledger = new Ledger(configPaths(config).ledgerPath);

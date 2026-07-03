@@ -73,6 +73,38 @@ describe("processor", () => {
     });
   });
 
+  it("rolls back classification writes when appendEvent throws mid-transaction", async () => {
+    const config = makeConfig(tempRoot("mail-bills-proc-rollback-"));
+    const ledger = new Ledger(configPaths(config).ledgerPath);
+    ledger.initialize();
+    ledger.upsertBatch({ batch_id: "batch-rb", status: "imported", item_count: 1 });
+    ledger.upsertDocument({ document_id: "doc-rb", batch_id: "batch-rb", status: "imported", local_pdf_path: "/tmp/rb.pdf" });
+
+    // Throw only on the first appendEvent call (inside the processDocument
+    // transaction).  The catch handler's "processing_error" appendEvent must
+    // be allowed through so processBatch can record the Error status row.
+    let appendEventCalls = 0;
+    (ledger as unknown as Record<string, unknown>)["appendEvent"] = () => {
+      appendEventCalls += 1;
+      if (appendEventCalls === 1) throw new Error("event write failed");
+    };
+
+    try {
+      const result = await processBatch({ batchId: "batch-rb", config, ledger, dryRun: false, services: services() });
+
+      expect(result.failed).toBe(1);
+
+      // The transaction that wrote classification fields must have rolled back.
+      const doc = ledger.getDocument("doc-rb");
+      expect(doc?.vendor ?? null).toBeNull();
+
+      // The catch handler wrote status: "Error" after the rollback.
+      expect(doc?.status).toBe("Error");
+    } finally {
+      ledger.close();
+    }
+  });
+
   it("loads duplicate sources once per batch, not once per document", async () => {
     const root = tempRoot("mail-bills-proc-dedupe-");
     const config = makeConfig(root);

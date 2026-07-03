@@ -11,7 +11,7 @@ import { ensureUnder, textValue } from "./paths.js";
 import { processBatch, processPending } from "./processor.js";
 import { applyDocumentAction } from "./actions.js";
 import { bootstrapDirectories } from "./bootstrap.js";
-import { uiCss, uiHtml, uiJs } from "./ui.js";
+import { uiAssets } from "./ui.js";
 import { PipelineScheduler } from "./scheduler.js";
 import { buildPairingPayload, ensureConfigToken, svgQr, validatePairingBaseUrl } from "./pairing.js";
 import { FailedAuthLimiter } from "./rate-limit.js";
@@ -36,11 +36,12 @@ export function createApi(config: MailBillsConfig): FastifyInstance {
   const intakeLimiter = new FailedAuthLimiter();
   const adminLimiter = new FailedAuthLimiter();
 
-  app.get("/", async (_request, reply) => reply.type("text/html; charset=utf-8").send(uiHtml));
+  const ui = uiAssets();
+  app.get("/", async (_request, reply) => reply.type("text/html; charset=utf-8").send(ui.html));
 
-  app.get("/ui/styles.css", async (_request, reply) => reply.type("text/css; charset=utf-8").send(uiCss));
+  app.get("/ui/styles.css", async (_request, reply) => reply.type("text/css; charset=utf-8").send(ui.css));
 
-  app.get("/ui/app.js", async (_request, reply) => reply.type("application/javascript; charset=utf-8").send(uiJs));
+  app.get("/ui/app.js", async (_request, reply) => reply.type("application/javascript; charset=utf-8").send(ui.js));
 
   app.get("/health", async () => ({
     ok: true,

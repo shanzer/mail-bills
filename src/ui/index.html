@@ -1,0 +1,248 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Mail Bills</title>
+    <link rel="stylesheet" href="/ui/styles.css" />
+  </head>
+  <body>
+    <header class="app-header">
+      <a class="wordmark" href="#console" data-view-link="console" aria-label="Mail Bills">
+        <span class="bracket">{&thinsp;</span>mail-bills<span class="bracket">&thinsp;}</span>
+      </a>
+      <nav class="top-nav" aria-label="Primary">
+        <a href="#console" data-view-link="console">Documents</a>
+        <a href="#review" data-view-link="review">Review</a>
+        <a href="#board" data-view-link="board">Board</a>
+        <a href="#status" data-view-link="status">Status</a>
+      </nav>
+      <div class="header-actions">
+        <span class="chip chip-nav" id="pipelineChip" hidden></span>
+        <button class="button button-quiet" type="button" data-run-pipeline="dry">Dry run</button>
+        <button class="button button-primary nav-cta" type="button" data-run-pipeline="live">Run pipeline</button>
+      </div>
+    </header>
+
+    <main class="shell">
+      <section class="page-title">
+        <div>
+          <p class="section-label">Physical mail</p>
+          <h1>Mail Bills</h1>
+        </div>
+      </section>
+
+      <section class="view is-active" id="view-console" aria-label="Console">
+        <aside class="sidebar">
+          <p class="section-label">Views</p>
+          <div class="filter-list" id="statusFilters"></div>
+        </aside>
+        <section class="work-panel">
+          <div class="panel-header">
+            <div>
+              <p class="section-label">Work list</p>
+              <h2 id="workListTitle">Inbox</h2>
+            </div>
+            <div class="toolbar">
+              <label class="search">
+                <span data-icon="search"></span>
+                <input id="documentSearch" type="search" placeholder="Search vendor, batch, id" />
+              </label>
+              <select class="category-filter" id="documentCategoryFilter" aria-label="Filter all documents by category"></select>
+              <button class="button button-secondary" type="button" data-import-pdf-open>Import PDF</button>
+              <button class="icon-button" type="button" id="refreshDocuments" aria-label="Refresh list"><span data-icon="refresh-cw"></span></button>
+            </div>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Vendor</th>
+                  <th class="amount-col">Amount</th>
+                  <th>Due date</th>
+                  <th>Status</th>
+                  <th>Category</th>
+                </tr>
+              </thead>
+              <tbody id="documentRows"></tbody>
+            </table>
+          </div>
+          <div class="empty-state" id="documentsEmpty">Nothing in this view.</div>
+          <div class="pager" id="docPager">
+            <button class="button button-secondary" id="pagerPrev" type="button" disabled>Prev</button>
+            <span class="pager-count" id="pagerCount">Showing 0–0 of 0</span>
+            <button class="button button-secondary" id="pagerNext" type="button" disabled>Next</button>
+          </div>
+        </section>
+      </section>
+
+      <section class="view" id="view-review" aria-label="Review">
+        <aside class="review-list">
+          <div class="panel-header compact">
+            <div>
+              <p class="section-label">Needs review</p>
+              <h2 id="reviewCount">0 documents</h2>
+            </div>
+          </div>
+          <div id="reviewItems" class="stack-list"></div>
+        </aside>
+        <section class="review-detail">
+          <div class="panel-header">
+            <div>
+              <p class="section-label">Document</p>
+              <h2 id="reviewTitle">Select a document</h2>
+            </div>
+            <div class="toolbar">
+              <button class="button button-secondary" type="button" id="openPdf">Open PDF viewer</button>
+            </div>
+          </div>
+          <div class="review-grid">
+            <div class="pdf-stage" id="pdfStage">
+              <div class="paper-placeholder">
+                <div></div>
+                <p>Select a document to read it here.</p>
+              </div>
+            </div>
+            <div class="inspector">
+              <article class="info-block">
+                <p class="section-label">Detected fields</p>
+                <dl id="fieldList"></dl>
+              </article>
+              <article class="info-block">
+                <p class="section-label">Editable fields</p>
+                <div class="field-editor">
+                  <label>Category<select id="categorySelect"></select></label>
+                  <label>Label<input id="shortcutLabel" type="text" /></label>
+                  <label>Vendor<input id="vendorInput" type="text" placeholder="Override detected vendor" /></label>
+                  <label>Notes<textarea id="notesInput" rows="3" placeholder="Free-form notes"></textarea></label>
+                </div>
+              </article>
+              <article class="info-block">
+                <p class="section-label">Due date</p>
+                <div class="due-editor">
+                  <input id="dueDate" type="date" />
+                  <label><input id="clearDueDate" type="checkbox" /> Clear</label>
+                </div>
+              </article>
+            </div>
+          </div>
+          <div class="action-bar">
+            <p class="section-label">Actions</p>
+            <div class="action-grid">
+              <button class="button button-primary" type="button" data-doc-action="actionable">Mark actionable</button>
+              <button class="button button-secondary" type="button" data-doc-action="update-fields">Save fields</button>
+              <button class="button button-secondary" type="button" data-doc-action="archive">Archive</button>
+              <button class="button button-secondary" type="button" data-doc-action="complete">Complete</button>
+              <button class="button button-secondary" type="button" data-doc-action="send-to-paperless">Send to Paperless</button>
+              <button class="button button-remove" type="button" data-doc-action="delete">Delete</button>
+              <button class="button button-remove" type="button" data-doc-action="purge">Purge from disk</button>
+            </div>
+          </div>
+        </section>
+      </section>
+
+      <section class="view" id="view-board" aria-label="Board">
+        <section class="work-panel full-width">
+          <div class="panel-header">
+            <div>
+              <p class="section-label">Batches</p>
+              <h2>Board</h2>
+            </div>
+          </div>
+          <div class="board" id="boardColumns"></div>
+        </section>
+      </section>
+
+      <section class="view" id="view-status" aria-label="Status">
+        <section class="work-panel full-width">
+          <div class="panel-header">
+            <div>
+              <p class="section-label">System status</p>
+              <h2 id="statusTitle">Loading</h2>
+            </div>
+            <div class="toolbar">
+              <button class="icon-button" type="button" id="refreshStatus" aria-label="Refresh status"><span data-icon="refresh-cw"></span></button>
+            </div>
+          </div>
+          <div class="metrics" id="statusMetrics"></div>
+          <div class="status-layout">
+            <article class="command-block">
+              <p class="section-label">Last result</p>
+              <div id="runOutput" class="run-output"><span class="muted">No pipeline run from this UI yet.</span></div>
+            </article>
+            <article class="path-block">
+              <p class="section-label">Configured paths</p>
+              <dl id="pathList"></dl>
+            </article>
+          </div>
+          <div class="pairing-strip">
+            <div>
+              <p class="section-label">iPhone app</p>
+              <h3>Pair scanner</h3>
+            </div>
+            <div class="toolbar">
+              <button class="button button-secondary" type="button" data-pairing-show>Show QR code</button>
+              <button class="button button-remove" type="button" data-pairing-rotate>New token + QR</button>
+            </div>
+          </div>
+        </section>
+      </section>
+    </main>
+
+    <div class="modal-backdrop" id="pairingModal" hidden>
+      <section class="modal" role="dialog" aria-modal="true" aria-labelledby="pairingTitle">
+        <div class="modal-header">
+          <div>
+            <p class="section-label">iPhone pairing</p>
+            <h2 id="pairingTitle">Scan QR code</h2>
+          </div>
+          <button class="icon-button" type="button" data-close-pairing aria-label="Close pairing QR"><span data-icon="x"></span></button>
+        </div>
+        <div class="qr-layout">
+          <div class="qr-box" id="pairingQr"></div>
+          <div>
+            <dl id="pairingDetails"></dl>
+            <p class="muted" id="pairingWarnings"></p>
+          </div>
+        </div>
+      </section>
+    </div>
+    <div class="modal-backdrop" id="importPdfModal" hidden>
+      <section class="modal compact-modal" role="dialog" aria-modal="true" aria-labelledby="importPdfTitle">
+        <form id="importPdfForm">
+          <div class="modal-header">
+            <div>
+              <p class="section-label">Browser import</p>
+              <h2 id="importPdfTitle">Import PDF</h2>
+            </div>
+            <button class="icon-button" type="button" data-import-pdf-close aria-label="Close PDF import"><span data-icon="x"></span></button>
+          </div>
+          <div class="modal-body">
+            <label>PDF<input id="importPdfFile" name="pdf" type="file" accept="application/pdf,.pdf" required /></label>
+            <label>Category<select id="importPdfCategory" name="category"></select></label>
+            <label>Label<input id="importPdfLabel" name="label" type="text" placeholder="Optional friendly label" /></label>
+            <label>Note<textarea id="importPdfNote" name="note" maxlength="500" rows="3" placeholder="Optional note"></textarea></label>
+          </div>
+          <div class="modal-actions">
+            <button class="button button-secondary" type="button" data-import-pdf-close>Cancel</button>
+            <button class="button button-primary" type="submit">Queue import</button>
+          </div>
+        </form>
+      </section>
+    </div>
+    <dialog class="token-dialog" id="tokenDialog">
+      <form method="dialog">
+        <p class="section-label">Admin access</p>
+        <h2>Admin token</h2>
+        <p class="muted" id="tokenDialogMessage">Enter the admin token to continue.</p>
+        <input id="tokenDialogInput" type="password" autocomplete="off" spellcheck="false" placeholder="Paste token" />
+        <div class="modal-actions">
+          <button class="button button-secondary" value="cancel" formnovalidate>Cancel</button>
+          <button class="button button-primary" value="submit">Save token</button>
+        </div>
+      </form>
+    </dialog>
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+    <script src="/ui/app.js" type="module"></script>
+  </body>
+</html>

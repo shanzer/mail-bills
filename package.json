@@ -4,7 +4,7 @@
   "description": "TypeScript REST service for the Mail Bills physical-mail processing pipeline",
   "type": "module",
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "build": "tsc -p tsconfig.json && mkdir -p dist/src/ui && cp src/ui/index.html src/ui/app.css src/ui/app.js dist/src/ui/",
     "check": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
     "start": "dotenv -e .env -- node dist/src/cli.js api --config config.yaml",

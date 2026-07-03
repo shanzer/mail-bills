@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { uiJs, uiHtml } from "../src/ui.js";
+import { uiJs, uiHtml, uiCss } from "../src/ui.js";
 
 describe("bill summary display", () => {
   it("renders structured JSON summary instead of raw OCR text", () => {
@@ -71,5 +71,49 @@ describe("embedded UI behavior", () => {
     expect(uiJs).toContain("state.selectedId = null;");
     expect(uiJs).toContain("state.status = \"All\";");
     expect(uiJs).toContain("showView(\"console\");");
+  });
+});
+
+describe("brand restyle", () => {
+  it("renders the amber-bracket wordmark with thin spaces", () => {
+    expect(uiHtml).toContain("{&thinsp;</span>mail-bills<span class=\"bracket\">&thinsp;}");
+  });
+
+  it("defines the brand tokens including forest-light", () => {
+    ["--charcoal: #1b2535", "--amber: #e09b2d", "--forest: #2a7a5e", "--forest-light: #3a9a76", "--linen: #f5f1eb"].forEach((token) => {
+      expect(uiCss).toContain(token);
+    });
+  });
+
+  it("uses no red and no box shadows anywhere", () => {
+    // The old danger palette and error red must be gone; charcoal/amber-dark carry those roles.
+    expect(uiCss).not.toMatch(/#(e57373|7f1d1d|fff1f1)/i);
+    expect(uiCss).not.toContain("box-shadow");
+  });
+
+  it("maps statuses to brand chips (forest reserved for success)", () => {
+    expect(uiJs).toContain("function statusClass(doc)");
+    expect(uiJs).toContain("return \"chip-review\"");
+    expect(uiJs).toContain("if (doc.status === \"Completed\" || doc.status === \"Archived\") return \"chip-done\"");
+    expect(uiJs).toContain("if (doc.status === \"Error\") return \"chip-error\"");
+    expect(uiJs).not.toContain("status-pill");
+  });
+
+  it("renders amounts in the table as mono right-aligned cells", () => {
+    expect(uiJs).toContain("<td class='amount-cell'>");
+    expect(uiCss).toMatch(/\.amount-col, \.amount-cell \{ text-align: right; \}/);
+  });
+
+  it("keeps rows openable and marks the selected row", () => {
+    expect(uiJs).toContain("data-open-doc='");
+    expect(uiJs).toContain("is-selected");
+  });
+
+  it("admin-token dialog keeps the localStorage + 401 retry mechanism", () => {
+    expect(uiHtml).toContain("id=\"tokenDialog\"");
+    expect(uiHtml).toContain("method=\"dialog\"");
+    expect(uiJs).toContain("function promptToken(message)");
+    expect(uiJs).toContain("localStorage.setItem(\"mailbills.adminToken\", entered.trim())");
+    expect(uiJs).toContain("return api(path, options);");
   });
 });

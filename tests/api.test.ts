@@ -472,6 +472,23 @@ describe("REST API", () => {
   });
 });
 
+it("rate limits repeated failed intake auth", async () => {
+  const app = createApi(makeConfig(tempRoot("mail-bills-api-rate-")));
+  const multipart = multipartBody({
+    pdf: ["doc-1.pdf", Buffer.from("%PDF upload\n"), "application/pdf"],
+    sidecar: ["doc-1.json", sidecarBytes(), "application/json"]
+  });
+  const attempt = (auth: string) => app.inject({
+    method: "POST", url: "/api/mail-bills/intake",
+    headers: { authorization: auth, "content-type": multipart.contentType },
+    payload: multipart.body
+  });
+  for (let i = 0; i < 5; i += 1) expect((await attempt("Bearer wrong")).statusCode).toBe(401);
+  expect((await attempt("Bearer wrong")).statusCode).toBe(429);
+  expect((await attempt("Bearer secret-token")).statusCode).toBe(429); // blocked even with the right token
+  await app.close();
+});
+
 function multipartBrowserImport(input: {
   pdf?: [string, Buffer, string];
   fields?: Record<string, string>;

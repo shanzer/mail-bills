@@ -14,6 +14,7 @@ import { bootstrapDirectories } from "./bootstrap.js";
 import { uiCss, uiHtml, uiJs } from "./ui.js";
 import { PipelineScheduler } from "./scheduler.js";
 import { buildPairingPayload, ensureConfigToken, svgQr } from "./pairing.js";
+import { FailedAuthLimiter } from "./rate-limit.js";
 
 /** Per-file multipart cap; the whole-request cap must fit both files + form overhead. */
 export const UPLOAD_FILE_LIMIT = 50 * 1024 * 1024;
@@ -32,6 +33,9 @@ export function createApi(config: MailBillsConfig): FastifyInstance {
     ledger.close();
   });
 
+  const intakeLimiter = new FailedAuthLimiter();
+  const adminLimiter = new FailedAuthLimiter();
+
   app.get("/", async (_request, reply) => reply.type("text/html; charset=utf-8").send(uiHtml));
 
   app.get("/ui/styles.css", async (_request, reply) => reply.type("text/css; charset=utf-8").send(uiCss));
@@ -46,8 +50,12 @@ export function createApi(config: MailBillsConfig): FastifyInstance {
   }));
 
   app.post("/api/mail-bills/intake", async (request, reply) => {
+    if (intakeLimiter.isBlocked(request.ip)) {
+      return reply.code(429).send({ ok: false, error: "too many failed auth attempts; try again later" });
+    }
     try {
       authorizeUpload(request.headers.authorization, config);
+      intakeLimiter.recordSuccess(request.ip);
       const parts = request.parts();
       let pdfBytes: Buffer | undefined;
       let sidecarBytes: Buffer | undefined;
@@ -60,12 +68,15 @@ export function createApi(config: MailBillsConfig): FastifyInstance {
       const result = acceptUpload({ pdfBytes: pdfBytes ?? Buffer.alloc(0), sidecarBytes: sidecarBytes ?? Buffer.alloc(0), config });
       return reply.code(result.created ? 201 : 200).send({ ok: true, created: result.created, documentId: result.documentId });
     } catch (error) {
-      if (error instanceof IntakeUploadError) return reply.code(error.statusCode).send({ ok: false, error: error.message });
+      if (error instanceof IntakeUploadError) {
+        if (error.statusCode === 401) intakeLimiter.recordFailure(request.ip);
+        return reply.code(error.statusCode).send({ ok: false, error: error.message });
+      }
       throw error;
     }
   });
 
-  app.post("/api/documents/import-pdf", { preHandler: requireAdmin(config) }, async (request, reply) => {
+  app.post("/api/documents/import-pdf", { preHandler: requireAdmin(config, adminLimiter) }, async (request, reply) => {
     try {
       const parts = request.parts();
       let pdfBytes: Buffer | undefined;
@@ -102,12 +113,12 @@ export function createApi(config: MailBillsConfig): FastifyInstance {
     }
   });
 
-  app.post("/api/bootstrap", { preHandler: requireAdmin(config) }, async (request, reply) => {
+  app.post("/api/bootstrap", { preHandler: requireAdmin(config, adminLimiter) }, async (request, reply) => {
     const dryRun = parseBoolean((request.query as any).dryRun);
     return reply.send({ ok: true, dryRun, directories: bootstrapDirectories(config, { dryRun }) });
   });
 
-  app.get("/api/documents", { preHandler: requireAdmin(config) }, async (request) => {
+  app.get("/api/documents", { preHandler: requireAdmin(config, adminLimiter) }, async (request) => {
     const query = request.query as Record<string, string | undefined>;
     return {
       ok: true,
@@ -120,18 +131,18 @@ export function createApi(config: MailBillsConfig): FastifyInstance {
     };
   });
 
-  app.get("/api/documents/:documentId", { preHandler: requireAdmin(config) }, async (request, reply) => {
+  app.get("/api/documents/:documentId", { preHandler: requireAdmin(config, adminLimiter) }, async (request, reply) => {
     const document = ledger.getDocument((request.params as any).documentId);
     if (!document) return reply.code(404).send({ ok: false, error: "document not found" });
     return { ok: true, document };
   });
 
-  app.get("/api/documents/:documentId/pdf", { preHandler: requireAdmin(config) }, async (request, reply) => {
+  app.get("/api/documents/:documentId/pdf", { preHandler: requireAdmin(config, adminLimiter) }, async (request, reply) => {
     const pdfPath = pdfPathForDocument(config, ledger, (request.params as any).documentId);
     return reply.type("application/pdf").send(fs.createReadStream(pdfPath));
   });
 
-  app.post("/api/documents/:documentId/actions", { preHandler: requireAdmin(config) }, async (request, reply) => {
+  app.post("/api/documents/:documentId/actions", { preHandler: requireAdmin(config, adminLimiter) }, async (request, reply) => {
     const body = (request.body ?? {}) as Record<string, any>;
     const result = await applyDocumentAction({
       documentId: (request.params as any).documentId,
@@ -150,7 +161,7 @@ export function createApi(config: MailBillsConfig): FastifyInstance {
     return reply.code(result.ok ? 200 : 400).send(result);
   });
 
-  app.post("/api/pipeline/process-pending", { preHandler: requireAdmin(config) }, async (request, reply) => {
+  app.post("/api/pipeline/process-pending", { preHandler: requireAdmin(config, adminLimiter) }, async (request, reply) => {
     const body = (request.body ?? {}) as Record<string, any>;
     const dryRun = body.dryRun !== false;
     let result;
@@ -169,7 +180,7 @@ export function createApi(config: MailBillsConfig): FastifyInstance {
     return reply.code(result.errors.length ? 207 : 200).send({ ok: result.errors.length === 0, ...result });
   });
 
-  app.post("/api/pipeline/batches/:batchId/process", { preHandler: requireAdmin(config) }, async (request, reply) => {
+  app.post("/api/pipeline/batches/:batchId/process", { preHandler: requireAdmin(config, adminLimiter) }, async (request, reply) => {
     const body = (request.body ?? {}) as Record<string, any>;
     const result = await scheduler.runExclusive(() =>
       processBatch({ batchId: (request.params as any).batchId, config, ledger, dryRun: body.dryRun !== false })
@@ -178,12 +189,12 @@ export function createApi(config: MailBillsConfig): FastifyInstance {
     return reply.code(result.errors.length ? 207 : 200).send({ ok: result.errors.length === 0, ...result });
   });
 
-  app.get("/api/pipeline/schedule", { preHandler: requireAdmin(config) }, async () => ({
+  app.get("/api/pipeline/schedule", { preHandler: requireAdmin(config, adminLimiter) }, async () => ({
     ok: true,
     schedule: scheduler.status()
   }));
 
-  app.get("/api/pairing/qr", { preHandler: requireAdmin(config) }, async (request, reply) => {
+  app.get("/api/pairing/qr", { preHandler: requireAdmin(config, adminLimiter) }, async (request, reply) => {
     try {
       const query = request.query as Record<string, string | undefined>;
       const payload = buildPairingPayload({ config, baseUrl: query.baseUrl });
@@ -193,7 +204,7 @@ export function createApi(config: MailBillsConfig): FastifyInstance {
     }
   });
 
-  app.post("/api/pairing/rotate-token", { preHandler: requireAdmin(config) }, async (request, reply) => {
+  app.post("/api/pairing/rotate-token", { preHandler: requireAdmin(config, adminLimiter) }, async (request, reply) => {
     if (!config.configPath) return reply.code(400).send({ ok: false, error: "configPath is required to rotate the intake token" });
     const body = (request.body ?? {}) as Record<string, any>;
     const token = ensureConfigToken(config.configPath, { rotate: true });
@@ -202,7 +213,7 @@ export function createApi(config: MailBillsConfig): FastifyInstance {
     return { ok: true, payload, qrSvg: await svgQr(payload) };
   });
 
-  app.get("/api/status", { preHandler: requireAdmin(config) }, async () => {
+  app.get("/api/status", { preHandler: requireAdmin(config, adminLimiter) }, async () => {
     const paths = configPaths(config);
     return {
       ok: true,
@@ -357,16 +368,26 @@ function clampInt(value: unknown, options: { min: number; max: number; fallback:
   return Math.min(Math.max(parsed, options.min), options.max);
 }
 
-function requireAdmin(config: MailBillsConfig) {
+function requireAdmin(config: MailBillsConfig, limiter: FailedAuthLimiter) {
   return async (
     request: { method: string; headers: { authorization?: string; origin?: string; host?: string }; ip?: string },
     reply: { code(c: number): { send(body: unknown): void }; send(body: unknown): void }
   ) => {
+    const ip = request.ip ?? "";
+    if (limiter.isBlocked(ip)) {
+      reply.code(429).send({ ok: false, error: "too many failed auth attempts; try again later" });
+      return;
+    }
     if (request.method !== "GET" && !isSameOrigin(request.headers.origin, request.headers.host)) {
       reply.code(403).send({ ok: false, error: "cross-origin request rejected" });
       return;
     }
     const decision = authorizeAdmin({ header: request.headers.authorization, ip: request.ip, adminToken: config.api?.adminToken });
-    if (!decision.ok) reply.code(decision.statusCode).send({ ok: false, error: decision.error });
+    if (!decision.ok) {
+      limiter.recordFailure(ip);
+      reply.code(decision.statusCode).send({ ok: false, error: decision.error });
+      return;
+    }
+    limiter.recordSuccess(ip);
   };
 }

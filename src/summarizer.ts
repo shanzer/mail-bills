@@ -29,7 +29,7 @@ const OLLAMA_HOST = process.env["OLLAMA_HOST"] ?? "http://yoyodyne.local:11434";
 const OLLAMA_MODEL = "llama3.2";
 const OLLAMA_TIMEOUT_MS = 60_000;
 
-const PROMPT_TEMPLATE = `You are a document intelligence assistant. Extract structured information from this physical mail OCR text.
+export const PROMPT_TEMPLATE = `You are a document intelligence assistant. Extract structured information from this physical mail OCR text.
 
 Return ONLY valid JSON matching this schema (omit any fields you cannot find — do not invent values):
 {
@@ -44,6 +44,11 @@ Return ONLY valid JSON matching this schema (omit any fields you cannot find —
   "payment_status": "payment status (e.g. Past Due, Current, Paid)",
   "balance_due": "balance due amount"
 }
+
+Rules:
+- "due_date" is ONLY an explicit payment deadline (e.g. "due by", "pay by", "due date"). NEVER use a sale, service, delivery, statement, or visit date. If the document has no payment deadline, omit "due_date" entirely.
+- "amount_due" is ONLY an amount the document demands be paid. A receipt or delivery-ticket total that has already been charged is "total_balance", not "amount_due".
+- Never guess: omit any field the text does not explicitly support.
 
 OCR Text:
 `;

@@ -153,7 +153,7 @@ export function createApi(config: MailBillsConfig): FastifyInstance {
     let result;
     try {
       result = dryRun
-        ? await processPending({ config, ledger, dryRun: true, stableDelayMs: Number(body.stableDelayMs ?? 1000) })
+        ? await scheduler.runExclusive(() => processPending({ config, ledger, dryRun: true, stableDelayMs: Number(body.stableDelayMs ?? 1000) }))
         : await scheduler.runNow();
     } catch (error) {
       return reply.code(500).send({
@@ -168,12 +168,10 @@ export function createApi(config: MailBillsConfig): FastifyInstance {
 
   app.post("/api/pipeline/batches/:batchId/process", { preHandler: requireAdmin(config) }, async (request, reply) => {
     const body = (request.body ?? {}) as Record<string, any>;
-    const result = await processBatch({
-      batchId: (request.params as any).batchId,
-      config,
-      ledger,
-      dryRun: body.dryRun !== false
-    });
+    const result = await scheduler.runExclusive(() =>
+      processBatch({ batchId: (request.params as any).batchId, config, ledger, dryRun: body.dryRun !== false })
+    );
+    if (!result) return reply.code(409).send({ ok: false, error: "pipeline is already running", schedule: scheduler.status() });
     return reply.code(result.errors.length ? 207 : 200).send({ ok: result.errors.length === 0, ...result });
   });
 

@@ -3,6 +3,7 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { loadConfig } from "../src/config.js";
 import {
+  PairingBaseUrlError,
   authorizationHeader,
   buildPairingPayload,
   ensureConfigToken,
@@ -10,6 +11,7 @@ import {
   multipartBody,
   pairingPayloadJson,
   terminalQr,
+  validatePairingBaseUrl,
   writeQrPng
 } from "../src/pairing.js";
 import { tempRoot } from "./helpers.js";
@@ -81,6 +83,34 @@ describe("pairing", () => {
     const { body, contentType } = multipartBody({ pdf: ["doc.pdf", Buffer.from("pdf"), "application/pdf"] });
     expect(contentType).toContain("multipart/form-data");
     expect(body.toString()).toContain('name="pdf"; filename="doc.pdf"');
+  });
+});
+
+describe("pairing baseUrl validation", () => {
+  it.each([
+    "http://yoyodyne:8765",
+    "http://192.168.1.10:8765",
+    "http://10.0.0.5",
+    "http://172.20.1.9:8080",
+    "http://100.101.102.103:8765",
+    "http://mac-mini.local:8765",
+    "https://host.tailnet.ts.net",
+    "http://127.0.0.1:8765",
+    "http://[::1]:8765"
+  ])("accepts private/LAN endpoint %s", (url) => {
+    expect(validatePairingBaseUrl(url)).toBe(url);
+  });
+
+  it.each([
+    "http://evil.example.com",
+    "https://attacker.io:8765",
+    "http://8.8.8.8",
+    "http://172.32.0.1",
+    "ftp://192.168.1.1",
+    "javascript:alert(1)",
+    "not a url"
+  ])("rejects public/invalid endpoint %s", (url) => {
+    expect(() => validatePairingBaseUrl(url)).toThrow(PairingBaseUrlError);
   });
 });
 

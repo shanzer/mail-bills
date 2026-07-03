@@ -13,7 +13,7 @@ import { applyDocumentAction } from "./actions.js";
 import { bootstrapDirectories } from "./bootstrap.js";
 import { uiCss, uiHtml, uiJs } from "./ui.js";
 import { PipelineScheduler } from "./scheduler.js";
-import { buildPairingPayload, ensureConfigToken, svgQr } from "./pairing.js";
+import { buildPairingPayload, ensureConfigToken, svgQr, validatePairingBaseUrl } from "./pairing.js";
 import { FailedAuthLimiter } from "./rate-limit.js";
 
 /** Per-file multipart cap; the whole-request cap must fit both files + form overhead. */
@@ -207,10 +207,15 @@ export function createApi(config: MailBillsConfig): FastifyInstance {
   app.post("/api/pairing/rotate-token", { preHandler: requireAdmin(config, adminLimiter) }, async (request, reply) => {
     if (!config.configPath) return reply.code(400).send({ ok: false, error: "configPath is required to rotate the intake token" });
     const body = (request.body ?? {}) as Record<string, any>;
-    const token = ensureConfigToken(config.configPath, { rotate: true });
-    config.intakeUpload.token = token;
-    const payload = buildPairingPayload({ config, baseUrl: body.baseUrl });
-    return { ok: true, payload, qrSvg: await svgQr(payload) };
+    try {
+      if (body.baseUrl) validatePairingBaseUrl(String(body.baseUrl));
+      const token = ensureConfigToken(config.configPath, { rotate: true });
+      config.intakeUpload.token = token;
+      const payload = buildPairingPayload({ config, baseUrl: body.baseUrl });
+      return { ok: true, payload, qrSvg: await svgQr(payload) };
+    } catch (error) {
+      return reply.code(400).send({ ok: false, error: error instanceof Error ? error.message : String(error) });
+    }
   });
 
   app.get("/api/status", { preHandler: requireAdmin(config, adminLimiter) }, async () => {

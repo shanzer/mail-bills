@@ -80,6 +80,8 @@ describe("CSRF origin checks", () => {
     expect(isSameOrigin("http://evil.example", "localhost")).toBe(false);
     expect(isSameOrigin(undefined, "localhost")).toBe(true);
     expect(isSameOrigin("http://evil.example", undefined)).toBe(false);
+    expect(isSameOrigin("null", "localhost")).toBe(false); // sandboxed-iframe Origin: null
+    expect(isSameOrigin("not-a-url", "localhost")).toBe(false);
   });
 
   it("rejects cross-origin state-changing requests in loopback-no-token mode", async () => {

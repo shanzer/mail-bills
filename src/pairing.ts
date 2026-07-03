@@ -39,7 +39,9 @@ export function validatePairingBaseUrl(baseUrl: string): string {
 
 function isPrivateHost(host: string): boolean {
   if (host === "localhost" || host === "::1") return true;
-  if (!host.includes(".") && !host.includes(":")) return true; // single-label LAN name, e.g. yoyodyne
+  // single-label LAN name (e.g. yoyodyne, mac-mini). Note: bare names like
+  // "evil" are accepted by design — resolution happens on the trusted LAN.
+  if (!host.includes(".") && !host.includes(":")) return true;
   if (PRIVATE_HOST_SUFFIXES.some((suffix) => host.endsWith(suffix))) return true;
   return isPrivateIp(host);
 }
@@ -57,7 +59,8 @@ function isPrivateIp(host: string): boolean {
     if (a === 169 && b === 254) return true; // link-local
     return false;
   }
-  return host.startsWith("fe80:") || host.startsWith("fd") || host.startsWith("fc"); // IPv6 link-local/ULA
+  return host.startsWith("fe80:") ||
+    (host.includes(":") && (host.startsWith("fd") || host.startsWith("fc"))); // IPv6 link-local/ULA
 }
 
 export interface PairingPayload {

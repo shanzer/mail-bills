@@ -96,7 +96,8 @@ describe("pairing baseUrl validation", () => {
     "http://mac-mini.local:8765",
     "https://host.tailnet.ts.net",
     "http://127.0.0.1:8765",
-    "http://[::1]:8765"
+    "http://[::1]:8765",
+    "http://[fd12:3456::1]:8765"
   ])("accepts private/LAN endpoint %s", (url) => {
     expect(validatePairingBaseUrl(url)).toBe(url);
   });
@@ -108,7 +109,10 @@ describe("pairing baseUrl validation", () => {
     "http://172.32.0.1",
     "ftp://192.168.1.1",
     "javascript:alert(1)",
-    "not a url"
+    "not a url",
+    "http://fd.example.com",
+    "http://fdsomething.example.com",
+    "http://fc.somenet.org:8765"
   ])("rejects public/invalid endpoint %s", (url) => {
     expect(() => validatePairingBaseUrl(url)).toThrow(PairingBaseUrlError);
   });

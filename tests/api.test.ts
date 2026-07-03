@@ -428,6 +428,17 @@ describe("REST API", () => {
     await app.close();
   });
 
+  it("rejects a public rotate-token baseUrl without burning the token", async () => {
+    const config = makeConfig(tempRoot("mail-bills-api-rotate-"));
+    const app = createApi(config);
+    const before = config.intakeUpload.token;
+    const response = await app.inject({ method: "POST", url: "/api/pairing/rotate-token", payload: { baseUrl: "http://evil.example.com" } });
+    expect(response.statusCode).toBe(400);
+    expect(config.intakeUpload.token).toBe(before);
+    expect(fs.existsSync(config.configPath!)).toBe(false);
+    await app.close();
+  });
+
   it("runs live process-pending without notification service configuration", async () => {
     const config = makeConfig(tempRoot("mail-bills-api-"));
     const app = createApi(config);

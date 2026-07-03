@@ -95,8 +95,21 @@ export async function extractBillSummary(ocrText: string): Promise<BillSummary |
   if (!match) return null;
 
   try {
-    return JSON.parse(match[0]) as BillSummary;
+    return sanitizeBillSummary(JSON.parse(match[0]) as BillSummary);
   } catch {
     return null;
   }
+}
+
+/**
+ * Small local models sometimes echo prompt keywords (e.g. due_date: "PAY BY")
+ * or emit placeholder text instead of omitting a field. Dates and money
+ * fields without a single digit are never valid — drop them.
+ */
+export function sanitizeBillSummary(summary: BillSummary): BillSummary {
+  const hasDigit = (value: unknown): boolean => typeof value === "string" && /\d/.test(value);
+  for (const field of ["due_date", "amount_due", "total_balance", "balance_due"] as const) {
+    if (summary[field] !== undefined && !hasDigit(summary[field])) delete summary[field];
+  }
+  return summary;
 }

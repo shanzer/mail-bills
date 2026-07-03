@@ -78,3 +78,17 @@ describe("ledger schema migration", () => {
     ledger.close();
   });
 });
+
+describe("ledger document counting", () => {
+  it("counts documents with the same filters as listDocuments", () => {
+    const ledger = new Ledger(path.join(tempRoot("ledger-count-"), "ledger.sqlite"));
+    ledger.initialize();
+    ledger.upsertDocument({ document_id: "a1", status: "Inbox", vendor: "GEICO" });
+    ledger.upsertDocument({ document_id: "a2", status: "Inbox", vendor: "Aetna" });
+    ledger.upsertDocument({ document_id: "a3", status: "Archived", vendor: "GEICO" });
+    expect(ledger.countDocuments()).toBe(3);
+    expect(ledger.countDocuments({ status: "Inbox" })).toBe(2);
+    expect(ledger.countDocuments({ q: "GEICO" })).toBe(2);
+    ledger.close();
+  });
+});

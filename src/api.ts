@@ -120,14 +120,19 @@ export function createApi(config: MailBillsConfig): FastifyInstance {
 
   app.get("/api/documents", { preHandler: requireAdmin(config, adminLimiter) }, async (request) => {
     const query = request.query as Record<string, string | undefined>;
+    const limit = clampInt(query.limit, { min: 1, max: 500, fallback: 200 });
+    const offset = clampInt(query.offset, { min: 0, max: Number.MAX_SAFE_INTEGER, fallback: 0 });
     return {
       ok: true,
       documents: ledger.listDocuments({
         status: query.status,
         q: query.q,
-        limit: clampInt(query.limit, { min: 1, max: 500, fallback: 200 }),
-        offset: clampInt(query.offset, { min: 0, max: Number.MAX_SAFE_INTEGER, fallback: 0 })
-      })
+        limit,
+        offset
+      }),
+      total: ledger.countDocuments({ status: query.status, q: query.q }),
+      limit,
+      offset
     };
   });
 

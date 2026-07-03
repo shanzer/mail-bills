@@ -408,6 +408,22 @@ describe("REST API", () => {
     await app.close();
   });
 
+  it("returns total/limit/offset for pagination", async () => {
+    const config = makeConfig(tempRoot("mail-bills-api-page-"));
+    const app = createApi(config);
+    const ledger = new Ledger(configPaths(config).ledgerPath);
+    ledger.initialize();
+    for (let i = 0; i < 5; i += 1) ledger.upsertDocument({ document_id: `p${i}`, status: "Inbox" });
+    ledger.close();
+    const response = await app.inject({ method: "GET", url: "/api/documents?limit=2&offset=0" });
+    const body = response.json();
+    expect(body.documents).toHaveLength(2);
+    expect(body.total).toBe(5);
+    expect(body.limit).toBe(2);
+    expect(body.offset).toBe(0);
+    await app.close();
+  });
+
   it("returns iPhone pairing QR data and can rotate the intake token", async () => {
     const config = makeConfig(tempRoot("mail-bills-api-"));
     const app = createApi(config);

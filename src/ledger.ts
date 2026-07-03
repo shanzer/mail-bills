@@ -208,6 +208,22 @@ export class Ledger {
   }
 
   listDocuments(options: { status?: string; q?: string; limit?: number; offset?: number } = {}): DocumentRecord[] {
+    const { where, params } = this.documentFilters(options);
+    const paginationParams = [options.limit ?? 200, options.offset ?? 0];
+    return this.fetchAll<DocumentRecord>(
+      `SELECT * FROM documents ${where} ORDER BY due_date IS NULL, due_date, document_id LIMIT ? OFFSET ?`,
+      ...params,
+      ...paginationParams
+    );
+  }
+
+  countDocuments(options: { status?: string; q?: string } = {}): number {
+    const { where, params } = this.documentFilters(options);
+    const row = this.fetchOne<{ count: number }>(`SELECT COUNT(*) AS count FROM documents ${where}`, ...params);
+    return Number(row?.count ?? 0);
+  }
+
+  private documentFilters(options: { status?: string; q?: string }): { where: string; params: unknown[] } {
     const clauses: string[] = [];
     const params: unknown[] = [];
     if (options.status) {
@@ -219,12 +235,7 @@ export class Ledger {
       const query = `%${options.q}%`;
       params.push(query, query, query);
     }
-    const where = clauses.length ? `WHERE ${clauses.join(" AND ")}` : "";
-    params.push(options.limit ?? 200, options.offset ?? 0);
-    return this.fetchAll<DocumentRecord>(
-      `SELECT * FROM documents ${where} ORDER BY due_date IS NULL, due_date, document_id LIMIT ? OFFSET ?`,
-      ...params
-    );
+    return { where: clauses.length ? `WHERE ${clauses.join(" AND ")}` : "", params };
   }
 
   appendEvent(input: {

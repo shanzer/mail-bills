@@ -395,8 +395,11 @@ function renderAll() {
 function showView(view, updateHash = true) {
   state.currentView = view;
   document.querySelectorAll(".view").forEach((node) => node.classList.toggle("is-active", node.id === "view-" + view));
-  document.querySelectorAll("[data-view-tab]").forEach((node) => node.classList.toggle("is-active", node.getAttribute("data-view-tab") === view));
-  document.querySelectorAll("[data-view-link]").forEach((node) => node.classList.toggle("is-active", node.getAttribute("data-view-link") === view));
+  document.querySelectorAll("[data-view-link]").forEach((node) => {
+    const isActive = node.getAttribute("data-view-link") === view;
+    node.classList.toggle("is-active", isActive);
+    node.setAttribute("aria-current", isActive ? "page" : "false");
+  });
   if (updateHash) history.replaceState(null, "", "#" + view);
 }
 
@@ -507,7 +510,7 @@ async function runPipeline(mode) {
 document.addEventListener("click", async (event) => {
   const target = event.target.closest("button, a");
   if (!target) return;
-  const view = target.getAttribute("data-view-tab") || target.getAttribute("data-view-link");
+  const view = target.getAttribute("data-view-link");
   if (view) {
     event.preventDefault();
     showView(view);

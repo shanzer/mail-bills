@@ -383,6 +383,27 @@ describe("REST API", () => {
     expect(await held).toBe("held");
     await app.close();
   });
+
+  it("clamps non-numeric and out-of-range limit/offset instead of 500ing", async () => {
+    const config = makeConfig(tempRoot("mail-bills-api-clamp-"));
+    const app = createApi(config);
+    const ledger = new Ledger(configPaths(config).ledgerPath);
+    ledger.initialize();
+    for (const id of ["d1", "d2", "d3"]) ledger.upsertDocument({ document_id: id, status: "Inbox" });
+    ledger.close();
+
+    const nan = await app.inject({ method: "GET", url: "/api/documents?limit=abc&offset=xyz" });
+    expect(nan.statusCode).toBe(200);
+    expect(nan.json().documents).toHaveLength(3);
+
+    const clamped = await app.inject({ method: "GET", url: "/api/documents?limit=-5" });
+    expect(clamped.statusCode).toBe(200);
+    expect(clamped.json().documents).toHaveLength(1); // clamped to min 1
+
+    const paged = await app.inject({ method: "GET", url: "/api/documents?limit=2&offset=2" });
+    expect(paged.json().documents).toHaveLength(1);
+    await app.close();
+  });
 });
 
 function multipartBrowserImport(input: {

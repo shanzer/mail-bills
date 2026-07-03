@@ -112,8 +112,8 @@ export function createApi(config: MailBillsConfig): FastifyInstance {
       documents: ledger.listDocuments({
         status: query.status,
         q: query.q,
-        limit: query.limit ? Number(query.limit) : 200,
-        offset: query.offset ? Number(query.offset) : 0
+        limit: clampInt(query.limit, { min: 1, max: 500, fallback: 200 }),
+        offset: clampInt(query.offset, { min: 0, max: Number.MAX_SAFE_INTEGER, fallback: 0 })
       })
     };
   });
@@ -333,6 +333,12 @@ export function authorizeAdmin(input: { header?: string; ip: string | undefined;
   }
   if (isLoopback(ip)) return { ok: true };
   return { ok: false, statusCode: 401, error: "admin token not configured; set api.admin_token to allow remote access" };
+}
+
+function clampInt(value: unknown, options: { min: number; max: number; fallback: number }): number {
+  const parsed = Number.parseInt(String(value ?? ""), 10);
+  if (Number.isNaN(parsed)) return options.fallback;
+  return Math.min(Math.max(parsed, options.min), options.max);
 }
 
 function requireAdmin(config: MailBillsConfig) {

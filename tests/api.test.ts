@@ -1,12 +1,19 @@
 import fs from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { authorizeAdmin, createApi } from "../src/api.js";
+import { authorizeAdmin, createApi, UPLOAD_BODY_LIMIT, UPLOAD_FILE_LIMIT } from "../src/api.js";
 import { configPaths } from "../src/config.js";
 import { scanImports } from "../src/importer.js";
 import { Ledger } from "../src/ledger.js";
 import { PipelineScheduler } from "../src/scheduler.js";
 import { makeConfig, multipartBody, sidecarBytes, tempRoot } from "./helpers.js";
+
+describe("upload limits", () => {
+  it("allows a whole-request body at least as large as the sum of file caps", async () => {
+    const { UPLOAD_BODY_LIMIT, UPLOAD_FILE_LIMIT } = await import("../src/api.js");
+    expect(UPLOAD_BODY_LIMIT).toBeGreaterThanOrEqual(2 * UPLOAD_FILE_LIMIT);
+  });
+});
 
 describe("admin authorization", () => {
   it("allows loopback callers when no admin token is configured", () => {

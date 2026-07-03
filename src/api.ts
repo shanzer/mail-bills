@@ -15,9 +15,13 @@ import { uiCss, uiHtml, uiJs } from "./ui.js";
 import { PipelineScheduler } from "./scheduler.js";
 import { buildPairingPayload, ensureConfigToken, svgQr } from "./pairing.js";
 
+/** Per-file multipart cap; the whole-request cap must fit both files + form overhead. */
+export const UPLOAD_FILE_LIMIT = 50 * 1024 * 1024;
+export const UPLOAD_BODY_LIMIT = 2 * UPLOAD_FILE_LIMIT + 5 * 1024 * 1024;
+
 export function createApi(config: MailBillsConfig): FastifyInstance {
-  const app = Fastify({ logger: fastifyLogger(config), bodyLimit: 50 * 1024 * 1024 });
-  app.register(multipart, { limits: { fileSize: 50 * 1024 * 1024, files: 2 } });
+  const app = Fastify({ logger: fastifyLogger(config), bodyLimit: UPLOAD_BODY_LIMIT });
+  app.register(multipart, { limits: { fileSize: UPLOAD_FILE_LIMIT, files: 2 } });
   const scheduler = new PipelineScheduler(config, app.log);
   scheduler.start();
   app.decorate("pipelineScheduler", scheduler);

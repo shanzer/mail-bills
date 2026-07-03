@@ -92,3 +92,16 @@ describe("ledger document counting", () => {
     ledger.close();
   });
 });
+
+describe("upsert null vs undefined semantics", () => {
+  it("preserves columns passed as undefined and clears columns passed as null", () => {
+    const ledger = new Ledger(path.join(tempRoot("ledger-nullsem-"), "ledger.sqlite"));
+    ledger.initialize();
+    ledger.upsertDocument({ document_id: "p1", status: "Inbox", ocr_summary_json: '{"amount_due":"$5"}' });
+    ledger.upsertDocument({ document_id: "p1", status: "Inbox", ocr_summary_json: undefined });
+    expect(ledger.getDocument("p1")?.ocr_summary_json).toBe('{"amount_due":"$5"}');
+    ledger.upsertDocument({ document_id: "p1", ocr_summary_json: null });
+    expect(ledger.getDocument("p1")?.ocr_summary_json).toBeNull();
+    ledger.close();
+  });
+});

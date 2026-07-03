@@ -61,8 +61,8 @@ export function acceptUpload(input: {
     if (
       fs.existsSync(pdfPath) &&
       fs.existsSync(sidecarPath) &&
-      Buffer.compare(fs.readFileSync(pdfPath), input.pdfBytes) === 0 &&
-      Buffer.compare(fs.readFileSync(sidecarPath), input.sidecarBytes) === 0
+      sameContent(pdfPath, input.pdfBytes) &&
+      sameContent(sidecarPath, input.sidecarBytes)
     ) {
       return { documentId, pdfPath, sidecarPath, created: false };
     }
@@ -71,15 +71,21 @@ export function acceptUpload(input: {
 
   const pdfPart = path.join(intakeDir, `${documentId}.pdf.part`);
   const sidecarPart = path.join(intakeDir, `${documentId}.json.part`);
+  const created: string[] = [];
   try {
     writeDurable(pdfPart, input.pdfBytes);
+    created.push(pdfPart);
     writeDurable(sidecarPart, input.sidecarBytes);
+    created.push(sidecarPart);
     loadSidecar(sidecarPart);
     fs.renameSync(pdfPart, pdfPath);
     fs.renameSync(sidecarPart, sidecarPath);
   } catch (error) {
-    cleanup(pdfPart, sidecarPart);
+    cleanup(...created); // never delete the other writer's .part files
     if (error instanceof SidecarValidationError) throw new IntakeUploadError(error.message);
+    if ((error as NodeJS.ErrnoException).code === "EEXIST") {
+      throw new UploadCollisionError(`upload already in progress: ${documentId}`);
+    }
     throw error;
   }
 
@@ -114,13 +120,20 @@ function safeSegment(value: string, fieldName: string): void {
 }
 
 function writeDurable(filePath: string, bytes: Buffer): void {
-  const fd = fs.openSync(filePath, "w");
+  // "wx" = exclusive create: a concurrent upload of the same documentId fails
+  // fast with EEXIST instead of silently overwriting the other writer's .part.
+  const fd = fs.openSync(filePath, "wx");
   try {
     fs.writeFileSync(fd, bytes);
     fs.fsyncSync(fd);
   } finally {
     fs.closeSync(fd);
   }
+}
+
+function sameContent(filePath: string, bytes: Buffer): boolean {
+  if (fs.statSync(filePath).size !== bytes.length) return false;
+  return Buffer.compare(fs.readFileSync(filePath), bytes) === 0;
 }
 
 function cleanup(...paths: string[]): void {

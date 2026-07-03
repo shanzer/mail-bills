@@ -30,4 +30,14 @@ describe("intake uploads", () => {
     expect(() => acceptUpload({ pdfBytes: Buffer.from("GIF89a not a pdf"), sidecarBytes: sidecarBytes("doc-magic"), config }))
       .toThrow(/%PDF/);
   });
+
+  it("fails fast without clobbering when a concurrent upload owns the .part file", () => {
+    const config = makeConfig(tempRoot("mail-bills-intake-race-"));
+    fs.mkdirSync(config.intakeUpload.intakeDir, { recursive: true });
+    const partPath = path.join(config.intakeUpload.intakeDir, "doc-race.pdf.part");
+    fs.writeFileSync(partPath, "other writer");
+    expect(() => acceptUpload({ pdfBytes: Buffer.from("%PDF mine"), sidecarBytes: sidecarBytes("doc-race"), config }))
+      .toThrow(UploadCollisionError);
+    expect(fs.readFileSync(partPath, "utf8")).toBe("other writer"); // the other writer's file survives
+  });
 });

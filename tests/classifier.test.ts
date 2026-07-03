@@ -31,6 +31,51 @@ describe("classifier", () => {
   });
 });
 
+describe("amount extraction", () => {
+  it("extracts TOTAL from delivery ticket with amount on next line", () => {
+    const text = `Petro Heating Oil
+SALE # 4712 DATE 02/01/26 11:39:17
+164.8 Gallons @ $4.879
+TOTAL $ THIS DELIVERY
+$804.06
+Thank you for your business`;
+    expect(classifyMail(text).amount).toBe("804.06");
+  });
+
+  it("returns undefined when only dollar figure is a unit price", () => {
+    const text = `Order: 50 widgets @ $4.879 each`;
+    expect(classifyMail(text).amount).toBeUndefined();
+  });
+
+  it("extracts inline labeled amount (Amount due $50)", () => {
+    expect(classifyMail("Amount due $50").amount).toBe("50");
+  });
+
+  it("labeled path skips Subtotal and matches the Total line", () => {
+    const text = `Subtotal $10.00\nTax $5.00\nTotal charged $95.00`;
+    expect(classifyMail(text).amount).toBe("95.00");
+  });
+
+  it("fallback prefers largest amount when no labeled keyword present", () => {
+    const text = `Payment received $10.00\nCharge $95.00\nFee $5.00`;
+    expect(classifyMail(text).amount).toBe("95.00");
+  });
+
+  it("fallback accepts amount followed by sentence punctuation (no labeled keyword)", () => {
+    const text = `Charge $95.00. Fee $5.00`;
+    expect(classifyMail(text).amount).toBe("95.00");
+  });
+
+  it("labeled path accepts amount followed by sentence punctuation", () => {
+    expect(classifyMail("Amount due: $95.00.").amount).toBe("95.00");
+  });
+
+  it("ignores unit price without @ prefix when 3 decimal places", () => {
+    const text = `Delivery charge $4.879/gal applies`;
+    expect(classifyMail(text).amount).toBeUndefined();
+  });
+});
+
 describe("due date extraction", () => {
   it("rejects impossible calendar dates", () => {
     const result = classifyMail("GEICO bill. Amount due $50. Payment due 13/45/2026.");

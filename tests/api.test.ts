@@ -5,6 +5,7 @@ import { authorizeAdmin, createApi } from "../src/api.js";
 import { configPaths } from "../src/config.js";
 import { scanImports } from "../src/importer.js";
 import { Ledger } from "../src/ledger.js";
+import { PipelineScheduler } from "../src/scheduler.js";
 import { makeConfig, multipartBody, sidecarBytes, tempRoot } from "./helpers.js";
 
 describe("admin authorization", () => {
@@ -360,6 +361,26 @@ describe("REST API", () => {
 
     expect(response.statusCode).toBe(200);
     expect(response.json()).toMatchObject({ ok: true, dryRun: false, batches: [] });
+    await app.close();
+  });
+
+  it("returns 409 from pipeline routes while a run is in progress", async () => {
+    const app = createApi(makeConfig(tempRoot("mail-bills-api-mutex-")));
+    const scheduler = (app as unknown as { pipelineScheduler: PipelineScheduler }).pipelineScheduler;
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+    const held = scheduler.runExclusive(async () => { await gate; return "held"; });
+
+    const pending = await app.inject({ method: "POST", url: "/api/pipeline/process-pending", payload: { dryRun: true } });
+    expect(pending.statusCode).toBe(409);
+    expect(pending.json().schedule).toBeDefined();
+
+    const batch = await app.inject({ method: "POST", url: "/api/pipeline/batches/b1/process", payload: { dryRun: true } });
+    expect(batch.statusCode).toBe(409);
+    expect(batch.json().schedule).toBeDefined();
+
+    release();
+    expect(await held).toBe("held");
     await app.close();
   });
 });

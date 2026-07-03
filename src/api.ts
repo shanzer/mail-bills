@@ -20,6 +20,7 @@ export function createApi(config: MailBillsConfig): FastifyInstance {
   app.register(multipart, { limits: { fileSize: 50 * 1024 * 1024, files: 2 } });
   const scheduler = new PipelineScheduler(config, app.log);
   scheduler.start();
+  app.decorate("pipelineScheduler", scheduler);
   const ledger = new Ledger(configPaths(config).ledgerPath);
   ledger.initialize();
   app.addHook("onClose", async () => {

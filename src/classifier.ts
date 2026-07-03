@@ -161,15 +161,20 @@ function detectVendor(text: string): string | undefined {
 }
 
 function extractAmount(text: string): string | undefined {
-  // Labeled pattern: the label and the dollar sign may be separated by up to
-  // 40 characters including newlines (e.g. "TOTAL $ THIS DELIVERY\n$804.06").
-  // \b prevents matching "total" inside "Subtotal". (?!\.?\d) blocks partial
-  // matches of unit prices like $4.879 (both as 4.87 and as backtracked bare 4)
-  // while allowing amounts followed by sentence punctuation like "$95.00.".
-  const labeledPattern =
-    /\b(?:amount due|amount you owe|premium amount due|balance due|total paid|total)[\s\S]{0,40}?\$\s*([0-9][0-9,]*(?:\.[0-9]{2})?)(?!\.?\d)/i;
-  const labeledMatch = text.match(labeledPattern);
-  if (labeledMatch !== null && labeledMatch.index !== undefined) {
+  // Labeled patterns in PRIORITY order — a payment-demand label anywhere in
+  // the text beats a generic total appearing earlier (e.g. "Total $10.00 ...
+  // Amount Due $95.00" must yield 95.00). Within each label, the label and the
+  // dollar sign may be separated by up to 40 characters including newlines
+  // (e.g. "TOTAL $ THIS DELIVERY\n$804.06"). \b prevents matching "total"
+  // inside "Subtotal". (?!\.?\d) blocks partial matches of unit prices like
+  // $4.879 while allowing amounts followed by sentence punctuation.
+  const labeledPatterns = [
+    /\b(?:amount due|amount you owe|premium amount due|balance due)[\s\S]{0,40}?\$\s*([0-9][0-9,]*(?:\.[0-9]{2})?)(?!\.?\d)/i,
+    /\b(?:total paid|total)[\s\S]{0,40}?\$\s*([0-9][0-9,]*(?:\.[0-9]{2})?)(?!\.?\d)/i
+  ];
+  for (const labeledPattern of labeledPatterns) {
+    const labeledMatch = text.match(labeledPattern);
+    if (labeledMatch === null || labeledMatch.index === undefined) continue;
     // Guard against unit prices: reject if the matched $ is immediately
     // preceded by @ (e.g. "@ $4.879 per gallon").
     const dollarPos = labeledMatch.index + labeledMatch[0].lastIndexOf("$");

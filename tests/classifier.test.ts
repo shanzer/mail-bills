@@ -97,3 +97,15 @@ describe("due date extraction", () => {
     expect(classifyMail("GEICO bill amount due $50. Due date: 06/15/2026").dueDate).toBe("2026-06-15");
   });
 });
+
+describe("labeled amount priority", () => {
+  it("prefers a payment-demand label over an earlier generic total", () => {
+    const result = classifyMail("GEICO invoice. Total $10.00 for services rendered. Amount Due $95.00. Pay by June 15, 2026.");
+    expect(result.amount).toBe("95.00");
+  });
+
+  it("still uses a generic total when no demand label exists", () => {
+    const result = classifyMail("GEICO receipt. Total $10.00. Thank you for your purchase.");
+    expect(result.amount).toBe("10.00");
+  });
+});

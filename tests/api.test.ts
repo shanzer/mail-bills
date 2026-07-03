@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { authorizeAdmin, createApi, UPLOAD_BODY_LIMIT, UPLOAD_FILE_LIMIT } from "../src/api.js";
+import { authorizeAdmin, createApi, isSameOrigin, UPLOAD_BODY_LIMIT, UPLOAD_FILE_LIMIT } from "../src/api.js";
 import { configPaths } from "../src/config.js";
 import { scanImports } from "../src/importer.js";
 import { Ledger } from "../src/ledger.js";
@@ -70,6 +70,42 @@ describe("admin authorization", () => {
       payload: multipart.body
     });
     expect(intake.statusCode).toBe(201);
+    await app.close();
+  });
+});
+
+describe("CSRF origin checks", () => {
+  it("isSameOrigin correctly compares origins and hosts", () => {
+    expect(isSameOrigin("http://localhost:80", "localhost")).toBe(true);
+    expect(isSameOrigin("http://evil.example", "localhost")).toBe(false);
+    expect(isSameOrigin(undefined, "localhost")).toBe(true);
+    expect(isSameOrigin("http://evil.example", undefined)).toBe(false);
+  });
+
+  it("rejects cross-origin state-changing requests in loopback-no-token mode", async () => {
+    const app = createApi(makeConfig(tempRoot("mail-bills-api-csrf-")));
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/bootstrap",
+      headers: { origin: "http://evil.example", host: "localhost" }
+    });
+    expect(response.statusCode).toBe(403);
+    await app.close();
+  });
+
+  it("allows same-origin posts and origin-less CLI posts", async () => {
+    const app = createApi(makeConfig(tempRoot("mail-bills-api-csrf-")));
+    const sameOrigin = await app.inject({ method: "POST", url: "/api/bootstrap", headers: { origin: "http://localhost:80", host: "localhost" } });
+    expect(sameOrigin.statusCode).toBe(200);
+    const noOrigin = await app.inject({ method: "POST", url: "/api/bootstrap" });
+    expect(noOrigin.statusCode).toBe(200);
+    await app.close();
+  });
+
+  it("does not block cross-origin GETs", async () => {
+    const app = createApi(makeConfig(tempRoot("mail-bills-api-csrf-")));
+    const response = await app.inject({ method: "GET", url: "/api/status", headers: { origin: "http://evil.example", host: "localhost" } });
+    expect(response.statusCode).toBe(200);
     await app.close();
   });
 });

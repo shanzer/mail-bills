@@ -319,6 +319,20 @@ function isLoopback(ip: string | undefined): boolean {
 }
 
 /**
+ * Browser CSRF guard: forms/fetch always send Origin on cross-origin POSTs.
+ * Requests without an Origin header (curl, CLI) pass — they are not CSRF-able.
+ */
+export function isSameOrigin(origin: string | undefined, host: string | undefined): boolean {
+  if (!origin) return true;
+  if (!host) return false;
+  try {
+    return new URL(origin).host === host;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Authorization decision for management endpoints. Pure for testability.
  *
  * - If an admin token is configured, the request must present a constant-time
@@ -344,7 +358,14 @@ function clampInt(value: unknown, options: { min: number; max: number; fallback:
 }
 
 function requireAdmin(config: MailBillsConfig) {
-  return async (request: { headers: { authorization?: string }; ip?: string }, reply: { code(c: number): { send(body: unknown): void }; send(body: unknown): void }) => {
+  return async (
+    request: { method: string; headers: { authorization?: string; origin?: string; host?: string }; ip?: string },
+    reply: { code(c: number): { send(body: unknown): void }; send(body: unknown): void }
+  ) => {
+    if (request.method !== "GET" && !isSameOrigin(request.headers.origin, request.headers.host)) {
+      reply.code(403).send({ ok: false, error: "cross-origin request rejected" });
+      return;
+    }
     const decision = authorizeAdmin({ header: request.headers.authorization, ip: request.ip, adminToken: config.api?.adminToken });
     if (!decision.ok) reply.code(decision.statusCode).send({ ok: false, error: decision.error });
   };

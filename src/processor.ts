@@ -49,15 +49,20 @@ export async function processPending(input: {
   services?: ProcessorServices;
 }): Promise<PendingProcessResult> {
   const dryRun = Boolean(input.dryRun);
+  const ownLedger = !input.ledger;
   const ledger = input.ledger ?? new Ledger(configPaths(input.config).ledgerPath);
   ledger.initialize();
-  const services = input.services ?? defaultProcessorServices();
-  const importSummary = await services.importScanner({ config: input.config, dryRun, stableDelayMs: input.stableDelayMs ?? 1000 });
-  const batches: BatchProcessResult[] = [];
-  for (const batchId of pendingBatchIds(ledger)) {
-    batches.push(await processBatch({ batchId, config: input.config, ledger, dryRun, services }));
+  try {
+    const services = input.services ?? defaultProcessorServices();
+    const importSummary = await services.importScanner({ config: input.config, dryRun, stableDelayMs: input.stableDelayMs ?? 1000 });
+    const batches: BatchProcessResult[] = [];
+    for (const batchId of pendingBatchIds(ledger)) {
+      batches.push(await processBatch({ batchId, config: input.config, ledger, dryRun, services }));
+    }
+    return { dryRun, importSummary, batches, errors: batches.flatMap((batch) => batch.errors) };
+  } finally {
+    if (ownLedger) ledger.close();
   }
-  return { dryRun, importSummary, batches, errors: batches.flatMap((batch) => batch.errors) };
 }
 
 export async function processBatch(input: {
@@ -68,37 +73,42 @@ export async function processBatch(input: {
   services?: ProcessorServices;
 }): Promise<BatchProcessResult> {
   const dryRun = Boolean(input.dryRun);
+  const ownLedger = !input.ledger;
   const ledger = input.ledger ?? new Ledger(configPaths(input.config).ledgerPath);
   ledger.initialize();
-  const services = input.services ?? defaultProcessorServices();
-  const plannedDocuments = new Map<string, DocumentRecord>();
-  const errors: Array<{ document_id: string; message: string }> = [];
-  let processed = 0;
+  try {
+    const services = input.services ?? defaultProcessorServices();
+    const plannedDocuments = new Map<string, DocumentRecord>();
+    const errors: Array<{ document_id: string; message: string }> = [];
+    let processed = 0;
 
-  for (const document of processableDocuments(ledger, input.batchId)) {
-    const documentId = textValue(document.document_id);
-    try {
-      const updated = await processDocument(document, { config: input.config, ledger, dryRun, services });
-      processed += 1;
-      plannedDocuments.set(documentId, updated);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      errors.push({ document_id: documentId, message });
-      if (dryRun) {
-        plannedDocuments.set(documentId, { ...document, status: "Error", error_message: message });
-      } else {
-        ledger.upsertDocument({ document_id: documentId, status: "Error", error_message: message });
-        ledger.appendEvent({ documentId, batchId: document.batch_id, eventType: "processing_error", payload: { message } });
-        plannedDocuments.set(documentId, ledger.getDocument(documentId) ?? { ...document, status: "Error", error_message: message });
+    for (const document of processableDocuments(ledger, input.batchId)) {
+      const documentId = textValue(document.document_id);
+      try {
+        const updated = await processDocument(document, { config: input.config, ledger, dryRun, services });
+        processed += 1;
+        plannedDocuments.set(documentId, updated);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        errors.push({ document_id: documentId, message });
+        if (dryRun) {
+          plannedDocuments.set(documentId, { ...document, status: "Error", error_message: message });
+        } else {
+          ledger.upsertDocument({ document_id: documentId, status: "Error", error_message: message });
+          ledger.appendEvent({ documentId, batchId: document.batch_id, eventType: "processing_error", payload: { message } });
+          plannedDocuments.set(documentId, ledger.getDocument(documentId) ?? { ...document, status: "Error", error_message: message });
+        }
       }
     }
-  }
 
-  const documents = dryRun
-    ? documentsForSummary(ledger, input.batchId, plannedDocuments)
-    : [...plannedDocuments.values()].sort((left, right) => left.document_id.localeCompare(right.document_id));
-  if (!dryRun) ledger.upsertBatch({ batch_id: input.batchId, status: errors.length ? "processed_with_errors" : "processed" });
-  return { batchId: input.batchId, processed, failed: errors.length, dryRun, documents, errors };
+    const documents = dryRun
+      ? documentsForSummary(ledger, input.batchId, plannedDocuments)
+      : [...plannedDocuments.values()].sort((left, right) => left.document_id.localeCompare(right.document_id));
+    if (!dryRun) ledger.upsertBatch({ batch_id: input.batchId, status: errors.length ? "processed_with_errors" : "processed" });
+    return { batchId: input.batchId, processed, failed: errors.length, dryRun, documents, errors };
+  } finally {
+    if (ownLedger) ledger.close();
+  }
 }
 
 async function processDocument(

@@ -24,6 +24,7 @@ describe("importer", () => {
     expect(fs.existsSync(pdf)).toBe(false);
     expect(fs.existsSync(sidecar)).toBe(false);
     expect(fs.existsSync(document!.local_pdf_path!)).toBe(true);
+    ledger.close();
   });
 
   it("scans configured upload intake", async () => {

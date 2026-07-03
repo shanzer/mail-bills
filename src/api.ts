@@ -20,7 +20,12 @@ export function createApi(config: MailBillsConfig): FastifyInstance {
   app.register(multipart, { limits: { fileSize: 50 * 1024 * 1024, files: 2 } });
   const scheduler = new PipelineScheduler(config, app.log);
   scheduler.start();
-  app.addHook("onClose", async () => scheduler.stop());
+  const ledger = new Ledger(configPaths(config).ledgerPath);
+  ledger.initialize();
+  app.addHook("onClose", async () => {
+    scheduler.stop();
+    ledger.close();
+  });
 
   app.get("/", async (_request, reply) => reply.type("text/html; charset=utf-8").send(uiHtml));
 
@@ -100,7 +105,6 @@ export function createApi(config: MailBillsConfig): FastifyInstance {
   });
 
   app.get("/api/documents", { preHandler: requireAdmin(config) }, async (request) => {
-    const ledger = initializedLedger(config);
     const query = request.query as Record<string, string | undefined>;
     return {
       ok: true,
@@ -114,20 +118,18 @@ export function createApi(config: MailBillsConfig): FastifyInstance {
   });
 
   app.get("/api/documents/:documentId", { preHandler: requireAdmin(config) }, async (request, reply) => {
-    const ledger = initializedLedger(config);
     const document = ledger.getDocument((request.params as any).documentId);
     if (!document) return reply.code(404).send({ ok: false, error: "document not found" });
     return { ok: true, document };
   });
 
   app.get("/api/documents/:documentId/pdf", { preHandler: requireAdmin(config) }, async (request, reply) => {
-    const pdfPath = pdfPathForDocument(config, (request.params as any).documentId);
+    const pdfPath = pdfPathForDocument(config, ledger, (request.params as any).documentId);
     return reply.type("application/pdf").send(fs.createReadStream(pdfPath));
   });
 
   app.post("/api/documents/:documentId/actions", { preHandler: requireAdmin(config) }, async (request, reply) => {
     const body = (request.body ?? {}) as Record<string, any>;
-    const ledger = initializedLedger(config);
     const result = await applyDocumentAction({
       documentId: (request.params as any).documentId,
       action: String(body.action ?? ""),
@@ -151,7 +153,7 @@ export function createApi(config: MailBillsConfig): FastifyInstance {
     let result;
     try {
       result = dryRun
-        ? await processPending({ config, ledger: initializedLedger(config), dryRun: true, stableDelayMs: Number(body.stableDelayMs ?? 1000) })
+        ? await processPending({ config, ledger, dryRun: true, stableDelayMs: Number(body.stableDelayMs ?? 1000) })
         : await scheduler.runNow();
     } catch (error) {
       return reply.code(500).send({
@@ -169,7 +171,7 @@ export function createApi(config: MailBillsConfig): FastifyInstance {
     const result = await processBatch({
       batchId: (request.params as any).batchId,
       config,
-      ledger: initializedLedger(config),
+      ledger,
       dryRun: body.dryRun !== false
     });
     return reply.code(result.errors.length ? 207 : 200).send({ ok: result.errors.length === 0, ...result });
@@ -237,14 +239,7 @@ function fastifyLogger(config: MailBillsConfig): false | { level: string } {
   return config.logging.level === "silent" ? false : { level: config.logging.level };
 }
 
-function initializedLedger(config: MailBillsConfig): Ledger {
-  const ledger = new Ledger(configPaths(config).ledgerPath);
-  ledger.initialize();
-  return ledger;
-}
-
-function pdfPathForDocument(config: MailBillsConfig, documentId: string): string {
-  const ledger = initializedLedger(config);
+function pdfPathForDocument(config: MailBillsConfig, ledger: Ledger, documentId: string): string {
   const document = ledger.getDocument(documentId);
   if (!document) throw Object.assign(new Error("document not found"), { statusCode: 404 });
   const rawPath = textValue(document.local_pdf_path);

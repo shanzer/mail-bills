@@ -51,6 +51,19 @@ describe("admin authorization", () => {
     await app.close();
   });
 
+  it("rate limits repeated failed admin auth", async () => {
+    const config = makeConfig(tempRoot("mail-bills-api-admin-rate-"));
+    config.api = { adminToken: "admin-secret" };
+    const app = createApi(config);
+    for (let i = 0; i < 5; i += 1) {
+      expect((await app.inject({ method: "GET", url: "/api/status", headers: { authorization: "Bearer wrong" } })).statusCode).toBe(401);
+    }
+    expect((await app.inject({ method: "GET", url: "/api/status", headers: { authorization: "Bearer wrong" } })).statusCode).toBe(429);
+    // Blocked even with the correct token.
+    expect((await app.inject({ method: "GET", url: "/api/status", headers: { authorization: "Bearer admin-secret" } })).statusCode).toBe(429);
+    await app.close();
+  });
+
   it("still serves health and the intake endpoint without the admin token", async () => {
     const config = makeConfig(tempRoot("mail-bills-api-auth-"));
     config.api = { adminToken: "admin-secret" };

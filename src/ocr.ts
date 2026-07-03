@@ -97,18 +97,22 @@ export async function processOcrDocument(input: {
   ledger: Ledger;
   ocrConfig: OcrConfig;
   dryRun?: boolean;
+  summaryExtractor?: typeof extractBillSummary;
 }): Promise<OcrResult> {
   const document = input.ledger.getDocument(input.documentId);
   if (!document) throw new Error(`document not found: ${input.documentId}`);
   if (!document.local_pdf_path) throw new Error(`document has no local_pdf_path: ${input.documentId}`);
   const result = await extractPdfText({ pdfPath: document.local_pdf_path, ocrConfig: input.ocrConfig });
-  result.structuredJson = await extractBillSummary(result.text).catch(() => null);
+  const summaryExtractor = input.summaryExtractor ?? extractBillSummary;
+  result.structuredJson = await summaryExtractor(result.text).catch(() => null);
   if (!input.dryRun) {
     input.ledger.upsertDocument({
       document_id: input.documentId,
       ocr_text: result.text,
       ocr_summary: result.summary,
-      ocr_summary_json: result.structuredJson ? JSON.stringify(result.structuredJson) : null,
+      // A failed/empty summarizer run must never clobber an existing summary:
+      // undefined is dropped by the upsert allowlist, preserving the column.
+      ocr_summary_json: result.structuredJson ? JSON.stringify(result.structuredJson) : undefined,
       confidence: result.confidence,
       review_reason: result.reviewReason,
       status: result.needsFallback ? "Needs Review" : document.status ?? "imported"

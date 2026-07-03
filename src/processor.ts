@@ -162,7 +162,8 @@ function documentUpdate(document: DocumentRecord, ocrResult: OcrResult, classifi
     document_id: document.document_id,
     ocr_text: ocrResult.text,
     ocr_summary: ocrResult.summary,
-    ocr_summary_json: ocrResult.structuredJson ? JSON.stringify(ocrResult.structuredJson) : null,
+    // undefined (not null) so a failed summarizer run preserves any existing summary.
+    ocr_summary_json: ocrResult.structuredJson ? JSON.stringify(ocrResult.structuredJson) : undefined,
     confidence: ocrResult.reviewReason ? "low" : textValue(classification.confidence, textValue(ocrResult.confidence, "low")),
     review_reason: reviewReason || null,
     status,

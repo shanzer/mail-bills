@@ -134,3 +134,33 @@ describe("processor", () => {
     ledger.close();
   });
 });
+
+it("preserves an existing bill summary when the summarizer returns nothing", async () => {
+  const root = tempRoot("mail-bills-proc-preserve-");
+  const config = makeConfig(root);
+  const ledger = new Ledger(configPaths(config).ledgerPath);
+  ledger.initialize();
+  ledger.upsertBatch({ batch_id: "b1", status: "imported" });
+  ledger.upsertDocument({
+    document_id: "d1", batch_id: "b1", status: "Needs Review", local_pdf_path: "/dev/null",
+    ocr_summary_json: '{"amount_due":"$804.06"}'
+  });
+  const services: ProcessorServices = {
+    importScanner: async () => ({ imported: 0, failed: 0, skipped: 0, dryRun: true }),
+    ocrProcessor: async () => ({
+      pdfPath: "x", text: "some text", pageCount: 1, confidence: "high", needsFallback: false,
+      summary: "s", modelSummaryEnabled: false, extractionMethod: "embedded" as const,
+      structuredJson: null // summarizer failed this run
+    }),
+    classifier: () => ({
+      category: "BILL", detectedCategory: "BILL", status: "Actionable", actionRequired: true,
+      confidence: "high", urgencyReasons: [], recommendedNextAction: "x", summary: "s", vendor: "V"
+    }),
+    duplicateSourceLoader: loadDuplicateSources,
+    duplicateDetector: detectDuplicates
+  };
+  const result = await processBatch({ batchId: "b1", config, ledger, dryRun: false, services });
+  expect(result.failed).toBe(0);
+  expect(ledger.getDocument("d1")?.ocr_summary_json).toBe('{"amount_due":"$804.06"}');
+  ledger.close();
+});

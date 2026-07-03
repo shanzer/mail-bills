@@ -3,6 +3,8 @@ import path from "node:path";
 import Database from "better-sqlite3";
 import type { BatchRecord, DocumentRecord } from "./types.js";
 
+export const SCHEMA_VERSION = 2;
+
 const BATCH_COLUMNS = new Set([
   "batch_id",
   "created_at",
@@ -116,9 +118,43 @@ export class Ledger {
         payload_json TEXT
       );
     `);
-    // Migrate existing databases that predate added columns.
-    for (const col of ["ocr_summary_json TEXT", "notes TEXT"]) {
-      try { db.exec(`ALTER TABLE documents ADD COLUMN ${col}`); } catch { /* already exists */ }
+    const version = Number(db.pragma("user_version", { simple: true }));
+    if (version < SCHEMA_VERSION) {
+      // Additive migrations for ledgers created by older schemas (incl. the Python era).
+      for (const col of [
+        "ocr_summary_json TEXT",
+        "notes TEXT",
+        "ocr_text TEXT",
+        "ocr_summary TEXT",
+        "confidence TEXT",
+        "review_reason TEXT",
+        "urgency_reasons_json TEXT",
+        "retention_decision TEXT",
+        "quarantined_until TEXT",
+        "duplicate_of_document_id TEXT",
+        "deleted_at TEXT",
+        "error_message TEXT",
+        "due_date TEXT",
+        "category TEXT",
+        "shortcut_label TEXT",
+        "detected_category TEXT",
+        "vendor TEXT",
+        "amount TEXT",
+        "source_pdf_path TEXT",
+        "local_pdf_path TEXT",
+        "sidecar_path TEXT",
+        "sha256 TEXT",
+        "created_at TEXT",
+        "imported_at TEXT"
+      ]) {
+        try { db.exec(`ALTER TABLE documents ADD COLUMN ${col}`); } catch { /* column exists */ }
+      }
+      db.exec(`
+        CREATE INDEX IF NOT EXISTS idx_documents_status ON documents(status);
+        CREATE INDEX IF NOT EXISTS idx_documents_batch_id ON documents(batch_id);
+        CREATE INDEX IF NOT EXISTS idx_documents_due_date ON documents(due_date);
+      `);
+      db.pragma(`user_version = ${SCHEMA_VERSION}`);
     }
   }
 

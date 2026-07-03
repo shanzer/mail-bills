@@ -174,16 +174,18 @@ function extractAmount(text: string): string | undefined {
 
 function extractDueDate(text: string): string | undefined {
   const numeric = text.match(/\b(?:due date|due|payment due|pay by|renew by)\D{0,20}(\d{1,2})\/(\d{1,2})\/(\d{4})\b/i);
-  if (numeric) return isoDate(Number(numeric[3]), Number(numeric[1]), Number(numeric[2]));
+  const numericDate = numeric ? isoDate(Number(numeric[3]), Number(numeric[1]), Number(numeric[2])) : undefined;
+  if (numericDate) return numericDate;
   const monthNames = Object.keys(MONTHS).join("|");
   const named = text.match(new RegExp(`\\b(?:due date|due|payment due by|payment due|pay by|renew by)\\D{0,20}(${monthNames})\\s+(\\d{1,2}),\\s*(\\d{4})\\b`, "i"));
-  if (named) return isoDate(Number(named[3]), MONTHS[named[1].toLowerCase()], Number(named[2]));
-  const bare = text.match(new RegExp(`\\b(${monthNames})\\s+(\\d{1,2}),\\s*(\\d{4})\\b`, "i"));
-  if (bare) return isoDate(Number(bare[3]), MONTHS[bare[1].toLowerCase()], Number(bare[2]));
-  return undefined;
+  return named ? isoDate(Number(named[3]), MONTHS[named[1].toLowerCase()], Number(named[2])) : undefined;
 }
 
-function isoDate(year: number, month: number, day: number): string {
+function isoDate(year: number, month: number, day: number): string | undefined {
+  if (month < 1 || month > 12 || day < 1 || day > 31) return undefined;
+  const parsed = new Date(Date.UTC(year, month - 1, day));
+  // Round-trip guard: Date.UTC(2026, 1, 30) rolls over to March — reject rollovers.
+  if (parsed.getUTCFullYear() !== year || parsed.getUTCMonth() !== month - 1 || parsed.getUTCDate() !== day) return undefined;
   return `${year.toString().padStart(4, "0")}-${month.toString().padStart(2, "0")}-${day.toString().padStart(2, "0")}`;
 }
 

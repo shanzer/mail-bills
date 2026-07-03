@@ -30,3 +30,25 @@ describe("classifier", () => {
     expect(result.detectedCategory).toBe("BILL");
   });
 });
+
+describe("due date extraction", () => {
+  it("rejects impossible calendar dates", () => {
+    const result = classifyMail("GEICO bill. Amount due $50. Payment due 13/45/2026.");
+    expect(result.dueDate).toBeUndefined();
+  });
+
+  it("rejects a real-looking but invalid day-of-month", () => {
+    const result = classifyMail("GEICO bill. Amount due $50. Due date: 02/30/2026.");
+    expect(result.dueDate).toBeUndefined();
+  });
+
+  it("ignores dates that are not adjacent to a due/pay keyword", () => {
+    const result = classifyMail("GEICO statement period January 5, 2026 through February 4, 2026. Amount due $50.");
+    expect(result.dueDate).toBeUndefined();
+  });
+
+  it("still extracts keyword-adjacent dates", () => {
+    expect(classifyMail("GEICO bill amount due $50, payment due by June 15, 2026").dueDate).toBe("2026-06-15");
+    expect(classifyMail("GEICO bill amount due $50. Due date: 06/15/2026").dueDate).toBe("2026-06-15");
+  });
+});
